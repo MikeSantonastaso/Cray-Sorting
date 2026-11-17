@@ -1,20 +1,22 @@
 (() => {
   'use strict';
+  const T = window.THREE;
 
   // ---------------------------------------------------------------------------
-  // World constants
+  // World constants (units are roughly meters)
   // ---------------------------------------------------------------------------
-  const W = 1280;          // world width
-  const H = 800;           // world height
-  const WALL = 160;        // wall height (floor starts below)
-  const CL = 34;           // crayon length
-  const CW = 9;            // crayon width
-  const BW = 84;           // sorting box width
-  const BH = 66;           // sorting box height
-  const SHELF_W = 170;
-  const SHELF_SLOTS = 6;
-  const SHELF_CAP = 4;
-  const SAVE_KEY = 'cray-sorting-save-v2';
+  const HALF = 12;            // room is 24 x 24
+  const WALL_H = 4.6;
+  const CL = 0.42;            // crayon length (chunky, toy-sized crayons)
+  const CR = 0.045;           // crayon radius
+  const MAX_CRAYONS = 10000;
+  const BOX_W = 1.1, BOX_D = 0.8, BOX_H = 0.7;
+  const PICK_DIST = 3.6;      // how far away you can grab a crayon
+  const TOSS_DIST = 16;       // how far away you can toss into a box
+  const SHELF_SLOTS = [-9, -5.4, -1.8, 1.8, 5.4, 9];
+  const SHELF_CAP = 5;
+  const SAVE_KEY = 'cray-sorting-3d-v1';
+  const TAU = Math.PI * 2;
 
   // Every color family comes in three shades. Each shade is sorted on its own.
   const FAMILIES = [
@@ -33,138 +35,62 @@
   FAMILIES.forEach((f, fi) => f.shades.forEach(([name, hex]) => {
     SHADES.push({ name, hex, family: fi, value: 1 + Math.floor(fi / 2) });
   }));
-  // Every box you start with: the middle shade of the first six families
+  const SHADE_COLORS = SHADES.map(s => new T.Color(s.hex));
+  // The boxes you start with: the middle shade of the first six families
   const START_BOXES = [1, 4, 7, 10, 13, 16];
 
   const DECOR = {
-    plant:    { name: 'Potted Plant',     price: 40,  cozy: 2,  w: 54,  h: 74 },
-    rug:      { name: 'Cozy Rug',         price: 60,  cozy: 3,  w: 230, h: 130, under: true },
-    lamp:     { name: 'Floor Lamp',       price: 70,  cozy: 3,  w: 44,  h: 110 },
-    beanbag:  { name: 'Beanbag',          price: 90,  cozy: 4,  w: 92,  h: 70 },
-    fishbowl: { name: 'Fish Bowl',        price: 150, cozy: 6,  w: 62,  h: 70 },
-    catbed:   { name: 'Cat Bed (with cat)', price: 250, cozy: 10, w: 104, h: 62 },
-    poster:   { name: 'Rainbow Poster',   price: 50,  cozy: 2,  w: 70,  h: 92,  wall: true },
-    clock:    { name: 'Wall Clock',       price: 45,  cozy: 2,  w: 58,  h: 58,  wall: true },
-    window:   { name: 'Window',           price: 100, cozy: 4,  w: 124, h: 104, wall: true },
-    lights:   { name: 'Fairy Lights',     price: 120, cozy: 5,  w: 280, h: 40,  wall: true },
+    plant:    { name: 'Potted Plant',       icon: '🪴', price: 40,  cozy: 2,  r: 0.4,  cy: 0.6 },
+    rug:      { name: 'Cozy Rug',           icon: '🟣', price: 60,  cozy: 3,  r: 1.5,  cy: 0.05, under: true },
+    lamp:     { name: 'Floor Lamp',         icon: '💡', price: 70,  cozy: 3,  r: 0.35, cy: 0.9 },
+    beanbag:  { name: 'Beanbag',            icon: '🛋️', price: 90,  cozy: 4,  r: 0.7,  cy: 0.35 },
+    fishbowl: { name: 'Fish Bowl',          icon: '🐟', price: 150, cozy: 6,  r: 0.45, cy: 0.8 },
+    catbed:   { name: 'Cat Bed (with cat)', icon: '🐈', price: 250, cozy: 10, r: 0.65, cy: 0.25 },
+    poster:   { name: 'Rainbow Poster',     icon: '🌈', price: 50,  cozy: 2,  r: 0.7,  wall: true },
+    clock:    { name: 'Wall Clock',         icon: '🕰️', price: 45,  cozy: 2,  r: 0.45, wall: true },
+    window:   { name: 'Window',             icon: '🪟', price: 100, cozy: 4,  r: 1.0,  wall: true },
+    lights:   { name: 'Fairy Lights',       icon: '✨', price: 120, cozy: 5,  r: 1.6,  wall: true },
   };
+
+  const handSize = l => [1, 3, 5, 8, 12, 16, 22][l];
+  const scoop = l => 0.45 + l * 0.3;
+  const boxCap = l => 20 + l * 10;
+  const deliveryInterval = l => 45 - l * 7;
+  const pileSize = l => 300 + l * 100;
+  const botCarry = l => 1 + Math.floor((l + 1) / 2);
+  const walkSpeed = l => 4 * (1 + l * 0.15);
 
   const UPGRADES = [
     { id: 'hand', name: 'Bigger Handfuls', icon: '🤲', max: 6, base: 30, mult: 2.1,
-      desc: l => `Scoop up to ${handSize(l + 1)} crayons of the same shade at once (now ${handSize(l)}).` },
-    { id: 'reach', name: 'Long Reach', icon: '📏', max: 4, base: 45, mult: 2.2,
-      desc: l => `Scoop matching crayons from farther away (${reach(l)}px → ${reach(l + 1)}px).` },
+      desc: l => `Grab up to ${handSize(l + 1)} crayons of the same shade in one click (now ${handSize(l)}).` },
+    { id: 'reach', name: 'Wide Scoop', icon: '🥄', max: 4, base: 45, mult: 2.2,
+      desc: l => `Scoop matching crayons from a wider area (${scoop(l).toFixed(2)}m → ${scoop(l + 1).toFixed(2)}m).` },
     { id: 'glow', name: 'Shade Spotter', icon: '🔦', max: 2, base: 60, mult: 4,
-      desc: l => l === 0 ? 'While holding crayons, their box glows and matching crayons in the piles light up.'
-                         : 'Hovering any crayon also lights up its box and every crayon of that shade.' },
+      desc: l => l === 0 ? 'While you hold crayons, every crayon of that shade glows, and so does its box.'
+                         : 'Just looking at a crayon lights up its whole shade and its box.' },
     { id: 'bigBox', name: 'Roomier Boxes', icon: '📦', max: 5, base: 50, mult: 2,
       desc: l => `Boxes hold ${boxCap(l + 1)} crayons (now ${boxCap(l)}).` },
     { id: 'pay', name: 'Collector Reputation', icon: '⭐', max: 8, base: 75, mult: 2,
       desc: l => `+25% coins for every crayon sorted (now +${l * 25}%).` },
+    { id: 'speed', name: 'Comfy Sneakers', icon: '👟', max: 4, base: 40, mult: 2.2,
+      desc: l => `Walk 15% faster (now +${l * 15}%).` },
     { id: 'delivery', name: 'Bigger Deliveries', icon: '🚚', max: 4, base: 80, mult: 2.3,
       desc: l => `New piles arrive every ${deliveryInterval(l + 1)}s with ${pileSize(l + 1)} crayons.` },
     { id: 'autoPack', name: 'Tape Gun', icon: '🧷', max: 1, base: 300, mult: 1,
-      desc: () => 'Full boxes pack themselves automatically.' },
+      desc: () => 'Full boxes pack themselves and go straight onto a shelf.' },
     { id: 'bots', name: 'Sortbot', icon: '🤖', max: 4, base: 250, mult: 3,
-      desc: l => `A little robot that sorts crayons for you. (${l} owned)` },
+      desc: l => `A little robot that roams the piles and sorts crayons for you. (${l} owned)` },
     { id: 'botSpeed', name: 'Sortbot Turbo', icon: '⚙️', max: 5, base: 200, mult: 2,
-      desc: l => `Sortbots move faster and carry more (${botCarry(l)} → ${botCarry(l + 1)} crayons).` },
+      desc: l => `Sortbots drive faster and carry more (${botCarry(l)} → ${botCarry(l + 1)} crayons).` },
   ];
-
-  const handSize = l => [1, 3, 5, 8, 12, 16, 22][l];
-  const reach = l => 90 + l * 40;
-  const boxCap = l => 20 + l * 10;
-  const deliveryInterval = l => 40 - l * 6;
-  const pileSize = l => 250 + l * 80;
-  const botCarry = l => 1 + Math.floor((l + 1) / 2);
-  const maxFloor = () => 4500 + state.upgrades.delivery * 400;
-
-  // ---------------------------------------------------------------------------
-  // State
-  // ---------------------------------------------------------------------------
-  let state;
-  let uid = 1;
-
-  function freshState() {
-    const s = {
-      coins: 0,
-      sorted: 0,
-      boxes: [],
-      shelves: [{ slot: 1, packed: [] }],
-      decor: [],
-      upgrades: Object.fromEntries(UPGRADES.map(u => [u.id, 0])),
-      crayons: [],
-      deliveryT: deliveryInterval(0),
-      extraBoxesBought: 0,
-      seenHelp: false,
-    };
-    return s;
-  }
-
-  function allShades() {
-    return SHADES.map((s, i) => i);
-  }
-
-  function load() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (raw) {
-        const s = JSON.parse(raw);
-        const base = freshState();
-        state = Object.assign(base, s);
-        state.upgrades = Object.assign(base.upgrades, s.upgrades || {});
-        state.boxes.forEach(b => { b.id = uid++; });
-        state.decor.forEach(d => { d.id = uid++; });
-        touch();
-        return;
-      }
-    } catch (e) { /* ignore broken saves */ }
-    newGame();
-  }
-
-  function newGame() {
-    state = freshState();
-    START_BOXES.forEach((c, i) => {
-      state.boxes.push({ id: uid++, x: 340 + i * 120, y: 735, color: c, count: 0 });
-    });
-    // Crayons absolutely everywhere, plus some extra-big heaps on top. Totally random shades.
-    spawnCarpet(1800);
-    spawnPile(280, 380, 420);
-    spawnPile(700, 310, 380);
-    spawnPile(1060, 480, 420);
-    spawnPile(560, 580, 320);
-    touch();
-  }
-
-  function save() {
-    try {
-      const s = Object.assign({}, state, {
-        boxes: state.boxes.map(({ x, y, color, count }) => ({ x, y, color, count })),
-        decor: state.decor.map(({ type, x, y }) => ({ type, x, y })),
-        crayons: state.crayons.map(c => ({ x: Math.round(c.x), y: Math.round(c.y), a: +c.a.toFixed(2), c: c.c })),
-      });
-      // Crayons in hand / on bots go back to the floor in the save
-      hand.forEach(c => s.crayons.push({ x: Math.round(c.x), y: Math.round(c.y), a: c.a, c: c.c }));
-      bots.forEach(b => b.carry.forEach(c => s.crayons.push({ x: Math.round(b.x), y: Math.round(b.y), a: c.a, c: c.c })));
-      localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-    } catch (e) { /* storage may be unavailable */ }
-  }
 
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
   const rand = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const dist2 = (ax, ay, bx, by) => (ax - bx) ** 2 + (ay - by) ** 2;
   const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) / 1.5;
-
-  function shade(hex, amt) {
-    const n = parseInt(hex.slice(1), 16);
-    const r = clamp((n >> 16) + amt, 0, 255);
-    const g = clamp(((n >> 8) & 255) + amt, 0, 255);
-    const b = clamp((n & 255) + amt, 0, 255);
-    return `rgb(${r},${g},${b})`;
-  }
+  const $ = id => document.getElementById(id);
 
   function fmt(n) {
     n = Math.floor(n);
@@ -172,353 +98,1218 @@
     if (n < 1e6) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'k';
     return (n / 1e6).toFixed(2).replace(/\.?0+$/, '') + 'M';
   }
-
-  function cozyPct() {
-    return Math.min(100, state.decor.reduce((s, d) => s + DECOR[d.type].cozy, 0));
-  }
-  function coinMult() {
-    return (1 + state.upgrades.pay * 0.25) * (1 + cozyPct() / 100);
-  }
-  function capacity() { return boxCap(state.upgrades.bigBox); }
-
-  function upgradeCost(u) {
-    return Math.round(u.base * Math.pow(u.mult, state.upgrades[u.id]));
-  }
-  function boxCost() { return Math.round(20 * Math.pow(1.18, state.extraBoxesBought)); }
-  function shelfCost() { return Math.round(80 * Math.pow(1.8, state.shelves.length - 1)); }
-
-  function earn(amount, x, y) {
-    state.coins += amount;
-    if (x !== undefined) floaters.push({ x, y, text: '+' + (amount < 10 ? amount.toFixed(1).replace(/\.0$/, '') : fmt(amount)), t: 0 });
+  function luminance(hex) {
+    const n = parseInt(hex.slice(1), 16);
+    return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
   }
 
   // ---------------------------------------------------------------------------
-  // Crayon piles
+  // State
   // ---------------------------------------------------------------------------
-  function blockedAt(x, y, pad = 8) {
+  let state;
+
+  function freshState() {
+    return {
+      coins: 0,
+      sorted: 0,
+      boxes: [],
+      shelves: [{ slot: 2, packed: [] }],
+      decor: [],
+      upgrades: Object.fromEntries(UPGRADES.map(u => [u.id, 0])),
+      deliveryT: deliveryInterval(0),
+      extraBoxesBought: 0,
+      player: { x: 0, z: 9.5, yaw: 0, pitch: -0.32 },
+      seenHelp: false,
+    };
+  }
+
+  const cozyPct = () => Math.min(100, state.decor.reduce((s, d) => s + DECOR[d.type].cozy, 0));
+  const coinMult = () => (1 + state.upgrades.pay * 0.25) * (1 + cozyPct() / 100);
+  const capacity = () => boxCap(state.upgrades.bigBox);
+  const maxFloor = () => 8400 + state.upgrades.delivery * 400;
+  const upgradeCost = u => Math.round(u.base * Math.pow(u.mult, state.upgrades[u.id]));
+  const boxCost = () => Math.round(20 * Math.pow(1.18, state.extraBoxesBought));
+  const shelfCost = () => Math.round(80 * Math.pow(1.8, state.shelves.length - 1));
+
+  // ---------------------------------------------------------------------------
+  // Renderer, scene, camera
+  // ---------------------------------------------------------------------------
+  const canvas = $('game');
+  const renderer = new T.WebGLRenderer({ canvas, antialias: true });
+  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = T.PCFSoftShadowMap;
+  const scene = new T.Scene();
+  scene.background = new T.Color(0x2b2233);
+  const camera = new T.PerspectiveCamera(70, 1, 0.03, 100);
+  camera.rotation.order = 'YXZ';
+  scene.add(camera);
+
+  function resize() {
+    const w = window.innerWidth, h = window.innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+
+  // Lights
+  scene.add(new T.HemisphereLight(0xfff3e0, 0x8a6a50, 0.62));
+  scene.add(new T.AmbientLight(0xffffff, 0.12));
+  const sun = new T.DirectionalLight(0xfff2dc, 0.6);
+  sun.position.set(6, 14, 5);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(2048, 2048);
+  Object.assign(sun.shadow.camera, { left: -14, right: 14, top: 14, bottom: -14, near: 1, far: 40 });
+  sun.shadow.bias = -0.0008;
+  scene.add(sun);
+
+  // ---------------------------------------------------------------------------
+  // Canvas textures
+  // ---------------------------------------------------------------------------
+  function canvasTex(w, h, draw, repeat) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    draw(c.getContext('2d'), w, h);
+    const t = new T.CanvasTexture(c);
+    if (repeat) { t.wrapS = t.wrapT = T.RepeatWrapping; t.repeat.set(repeat[0], repeat[1]); }
+    t.anisotropy = 4;
+    return t;
+  }
+
+  const woodTex = canvasTex(512, 512, (g, w, h) => {
+    const rows = 8;
+    for (let r = 0; r < rows; r++) {
+      const y = r * h / rows;
+      for (let k = 0; k < 3; k++) {
+        const x0 = ((r % 2) * 0.5 + k) * w / 2 - w / 4;
+        g.fillStyle = `hsl(${28 + Math.random() * 6}, ${45 + Math.random() * 10}%, ${56 + Math.random() * 10}%)`;
+        g.fillRect(x0, y, w / 2, h / rows);
+        g.strokeStyle = 'rgba(90,55,25,.35)';
+        g.lineWidth = 3;
+        g.strokeRect(x0, y, w / 2, h / rows);
+      }
+      g.strokeStyle = 'rgba(120,75,40,.12)';
+      g.lineWidth = 1;
+      for (let i = 0; i < 6; i++) {
+        g.beginPath();
+        g.moveTo(0, y + 6 + Math.random() * (h / rows - 12));
+        g.bezierCurveTo(w / 3, y + Math.random() * h / rows, 2 * w / 3, y + Math.random() * h / rows, w, y + 6 + Math.random() * (h / rows - 12));
+        g.stroke();
+      }
+    }
+  }, [6, 6]);
+
+  const wallTex = canvasTex(256, 256, (g, w, h) => {
+    g.fillStyle = '#f7e6cf'; g.fillRect(0, 0, w, h);
+    g.fillStyle = 'rgba(232,190,150,.45)';
+    for (let x = 0; x < w; x += 64) g.fillRect(x, 0, 24, h);
+    g.fillStyle = 'rgba(255,140,120,.25)';
+    for (let x = 44; x < w; x += 64) for (let y = 16; y < h; y += 48) { g.beginPath(); g.arc(x, y, 3, 0, TAU); g.fill(); }
+  }, [12, 2.5]);
+
+  // ---------------------------------------------------------------------------
+  // Room
+  // ---------------------------------------------------------------------------
+  {
+    const floor = new T.Mesh(new T.PlaneGeometry(HALF * 2, HALF * 2), new T.MeshStandardMaterial({ map: woodTex, roughness: 0.8 }));
+    floor.rotation.x = -Math.PI / 2;
+    floor.receiveShadow = true;
+    scene.add(floor);
+    const wallMat = new T.MeshStandardMaterial({ map: wallTex, roughness: 0.95 });
+    const baseMat = new T.MeshStandardMaterial({ color: 0xfff7ea, roughness: 0.7 });
+    [[0, -HALF, 0], [0, HALF, Math.PI], [-HALF, 0, Math.PI / 2], [HALF, 0, -Math.PI / 2]].forEach(([x, z, ry]) => {
+      const wall = new T.Mesh(new T.PlaneGeometry(HALF * 2, WALL_H), wallMat);
+      wall.position.set(x, WALL_H / 2, z);
+      wall.rotation.y = ry;
+      wall.receiveShadow = true;
+      scene.add(wall);
+      const base = new T.Mesh(new T.BoxGeometry(HALF * 2, 0.18, 0.05), baseMat);
+      base.position.set(x, 0.09, z);
+      base.rotation.y = ry;
+      base.translateZ(0.025);
+      scene.add(base);
+    });
+    const ceil = new T.Mesh(new T.PlaneGeometry(HALF * 2, HALF * 2), new T.MeshStandardMaterial({ color: 0xfffaf2, roughness: 1 }));
+    ceil.rotation.x = Math.PI / 2;
+    ceil.position.y = WALL_H;
+    scene.add(ceil);
+    for (const [x, z] of [[-6, -6], [6, -6], [-6, 6], [6, 6], [0, 0]]) {
+      const l = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 0.06, 24), new T.MeshBasicMaterial({ color: 0xfff6d8 }));
+      l.position.set(x, WALL_H - 0.03, z);
+      scene.add(l);
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Crayons: one instanced mesh for thousands of crayons
+  // ---------------------------------------------------------------------------
+  function mergeGeos(parts) {
+    const pos = [], nor = [], col = [];
+    for (const [g0, gray] of parts) {
+      const g = g0.index ? g0.toNonIndexed() : g0;
+      const p = g.attributes.position.array, n = g.attributes.normal.array;
+      for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
+      for (let i = 0; i < p.length / 3; i++) col.push(gray, gray, gray);
+    }
+    const g = new T.BufferGeometry();
+    g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
+    g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
+    g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+    return g;
+  }
+
+  const crayonGeo = (() => {
+    const body = new T.CylinderGeometry(CR, CR, CL - 0.08, 8);
+    body.translate(0, -0.04, 0);
+    const tip = new T.CylinderGeometry(0.012, CR, 0.08, 8);
+    tip.translate(0, CL / 2 - 0.04, 0);
+    const wrap = new T.CylinderGeometry(CR * 1.12, CR * 1.12, 0.2, 8);
+    wrap.translate(0, -0.05, 0);
+    const g = mergeGeos([[body, 1], [tip, 1], [wrap, 0.62]]);
+    g.rotateZ(-Math.PI / 2); // long axis along +X, tip at +X
+    g.computeBoundingSphere();
+    return g;
+  })();
+
+  const crayonMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 });
+  const crayonMesh = new T.InstancedMesh(crayonGeo, crayonMat, MAX_CRAYONS);
+  crayonMesh.setColorAt(0, new T.Color(1, 1, 1)); // creates the per-instance color buffer
+  crayonMesh.count = 0;
+  crayonMesh.castShadow = true;
+  crayonMesh.receiveShadow = true;
+  crayonMesh.frustumCulled = false;
+  scene.add(crayonMesh);
+
+  const shadeMats = SHADES.map(s => new T.MeshStandardMaterial({ color: s.hex, vertexColors: true, roughness: 0.55 }));
+
+  // Live floor crayons. Index in this array == instance index.
+  let cr = [];
+  const animating = new Set();
+  let matDirty = false, colDirty = false;
+  const _m = new T.Matrix4(), _q = new T.Quaternion(), _p = new T.Vector3(), _v = new T.Vector3(), _s = new T.Vector3(1, 1, 1);
+  const XAXIS = new T.Vector3(1, 0, 0);
+
+  function writeMatrix(o) {
+    _p.set(o.x, o.y + o.dy, o.z);
+    _q.setFromUnitVectors(XAXIS, _v.set(o.ax, o.ay, o.az));
+    _m.compose(_p, _q, _s);
+    crayonMesh.setMatrixAt(o.i, _m);
+    matDirty = true;
+  }
+  function writeColor(o, color) {
+    crayonMesh.setColorAt(o.i, color || SHADE_COLORS[o.c]);
+    colDirty = true;
+  }
+
+  // Spatial hash so piles can be built and re-settled quickly
+  const CELL = 0.2;
+  const grid = new Map();
+  const cellKey = (ix, iz) => (ix + 1000) * 4000 + (iz + 1000);
+  function hashInsert(o) {
+    o.k = cellKey(Math.floor(o.x / CELL), Math.floor(o.z / CELL));
+    let a = grid.get(o.k);
+    if (!a) grid.set(o.k, a = []);
+    a.push(o);
+  }
+  function hashRemove(o) {
+    const a = grid.get(o.k);
+    if (!a) return;
+    const i = a.indexOf(o);
+    if (i >= 0) { a[i] = a[a.length - 1]; a.pop(); }
+  }
+  function forNear(x, z, r, fn) {
+    const x0 = Math.floor((x - r) / CELL), x1 = Math.floor((x + r) / CELL);
+    const z0 = Math.floor((z - r) / CELL), z1 = Math.floor((z + r) / CELL);
+    for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+      const a = grid.get(cellKey(ix, iz));
+      if (a) for (let i = 0; i < a.length; i++) fn(a[i]);
+    }
+  }
+
+  // Height a crayon's center would rest at, at (x, z)
+  const CONTACT = 0.13;
+  function supportAt(x, z) {
+    let top = CR;
+    forNear(x, z, CONTACT, o => {
+      const dx = o.x - x, dz = o.z - z;
+      if (dx * dx + dz * dz < CONTACT * CONTACT) top = Math.max(top, o.y + CR * 1.7);
+    });
+    return top;
+  }
+  function topAt(x, z, r = 0.3) {
+    let top = 0;
+    forNear(x, z, r, o => {
+      const dx = o.x - x, dz = o.z - z;
+      if (dx * dx + dz * dz < r * r) top = Math.max(top, o.y + CR);
+    });
+    return top;
+  }
+
+  function boxHalf(b) {
+    return b.rot % 2 ? [BOX_D / 2, BOX_W / 2] : [BOX_W / 2, BOX_D / 2];
+  }
+
+  function blockedAt(x, z, pad = 0.12) {
     for (const b of state.boxes) {
-      if (Math.abs(x - b.x) < BW / 2 + pad && Math.abs(y - b.y) < BH / 2 + pad) return true;
+      const [hw, hd] = boxHalf(b);
+      if (Math.abs(x - b.x) < hw + pad && Math.abs(z - b.z) < hd + pad) return b;
     }
     for (const d of state.decor) {
       const def = DECOR[d.type];
       if (def.wall || def.under) continue;
-      if (Math.abs(x - d.x) < def.w / 2 + pad && Math.abs(y - d.y) < def.h / 2 + pad) return true;
+      if ((x - d.x) ** 2 + (z - d.z) ** 2 < (def.r + pad) ** 2) return d;
     }
-    return false;
+    return null;
   }
 
-  function onFloor(x, y) {
-    return x > 20 && x < W - 20 && y > WALL + 18 && y < H - 14;
+  function pushOut(x, z) {
+    for (let k = 0; k < 6; k++) {
+      const b = blockedAt(x, z);
+      if (!b) break;
+      let dx = x - b.x, dz = z - b.z;
+      const l = Math.hypot(dx, dz) || 1;
+      dx /= l; dz /= l;
+      x += dx * 0.35; z += dz * 0.35;
+    }
+    return [clamp(x, -HALF + 0.3, HALF - 0.3), clamp(z, -HALF + 0.3, HALF - 0.3)];
   }
 
-  // Every crayon gets a completely random shade: no clumping by color at all.
+  // Let a crayon roll down the side of a pile until it finds a resting spot
+  function settlePoint(x, z) {
+    [x, z] = pushOut(x, z);
+    let y = supportAt(x, z);
+    // a step longer than the contact radius, and a drop that gives a steep-ish heap
+    for (let k = 0; k < 30; k++) {
+      let best = null, by = y;
+      for (let j = 0; j < 6; j++) {
+        const a = Math.random() * TAU;
+        const nx = x + Math.cos(a) * 0.2, nz = z + Math.sin(a) * 0.2;
+        if (Math.abs(nx) > HALF - 0.3 || Math.abs(nz) > HALF - 0.3 || blockedAt(nx, nz)) continue;
+        const ny = supportAt(nx, nz);
+        if (ny < by - 0.17) { by = ny; best = [nx, nz]; }
+      }
+      if (!best) break;
+      [x, z] = best; y = by;
+    }
+    return [x, y, z];
+  }
+
+  function setAxis(o, onPile) {
+    const yaw = Math.random() * TAU;
+    const tilt = onPile ? rand(-0.35, 0.35) : rand(-0.04, 0.04);
+    o.ax = Math.cos(tilt) * Math.cos(yaw);
+    o.ay = Math.sin(tilt);
+    o.az = -Math.cos(tilt) * Math.sin(yaw);
+  }
+
+  function pushCrayon(o) {
+    o.i = cr.length;
+    hashInsert(o);
+    cr.push(o);
+    crayonMesh.count = cr.length;
+    writeMatrix(o);
+    writeColor(o);
+    return o;
+  }
+
+  function addCrayon(x, z, c, dropFrom = 0, delay = 0) {
+    if (cr.length >= MAX_CRAYONS) return null;
+    const [sx, sy, sz] = settlePoint(x, z);
+    const o = { x: sx, y: sy, z: sz, c, dy: 0, vy: 0, delay: 0 };
+    setAxis(o, sy > CR + 0.01);
+    if (dropFrom > 0) { o.dy = dropFrom; o.delay = delay; animating.add(o); }
+    return pushCrayon(o);
+  }
+
+  function removeCrayon(o) {
+    if (o.dead) return;
+    o.dead = true;
+    hashRemove(o);
+    animating.delete(o);
+    const idx = o.i;
+    const last = cr.pop();
+    if (last !== o) {
+      cr[idx] = last;
+      last.i = idx;
+      writeMatrix(last);
+      writeColor(last);
+    }
+    crayonMesh.count = cr.length;
+    resettle(o.x, o.z, o.y);
+  }
+
+  // When a crayon is taken out of a pile, the ones resting on it slide down
+  function resettle(x, z, y0) {
+    const queue = [[x, z, y0]];
+    let guard = 0;
+    while (queue.length && guard++ < 250) {
+      const [qx, qz, qy] = queue.shift();
+      const list = [];
+      forNear(qx, qz, 0.22, o => {
+        if (o.y > qy + 0.01 && (o.x - qx) ** 2 + (o.z - qz) ** 2 < 0.22 * 0.22) list.push(o);
+      });
+      list.sort((a, b) => a.y - b.y);
+      for (const o of list) {
+        hashRemove(o);
+        const ny = supportAt(o.x, o.z);
+        if (ny < o.y - 0.01) {
+          o.dy += o.y - ny;
+          o.y = ny;
+          animating.add(o);
+          queue.push([o.x, o.z, ny]);
+        }
+        hashInsert(o);
+      }
+    }
+  }
+
   const randomShade = () => Math.floor(Math.random() * SHADES.length);
 
-  function spawnPile(cx, cy, n, animate = false) {
-    const radius = 50 + Math.sqrt(n) * 7;
-    let placed = 0, tries = 0;
-    while (placed < n && tries < n * 30) {
-      tries++;
+  function spawnPile(cx, cz, n, animate) {
+    const radius = 0.6 + Math.sqrt(n) * 0.06;
+    let placed = 0;
+    for (let i = 0; i < n * 3 && placed < n; i++) {
       const r = Math.abs(gauss()) * radius;
-      const ang = Math.random() * Math.PI * 2;
-      const x = cx + Math.cos(ang) * r * 1.3;
-      const y = cy + Math.sin(ang) * r * 0.85;
-      if (!onFloor(x, y) || blockedAt(x, y)) continue;
-      const cr = { x, y, a: Math.random() * Math.PI * 2, c: randomShade() };
-      if (animate) { cr.drop = rand(0, 0.6); cr.fall = 0; }
-      state.crayons.push(cr);
-      placed++;
+      const a = Math.random() * TAU;
+      const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
+      if (Math.abs(x) > HALF - 0.4 || Math.abs(z) > HALF - 0.4) continue;
+      if (addCrayon(x, z, randomShade(), animate ? rand(4, 5.5) : 0, animate ? rand(0, 1.6) : 0)) placed++;
     }
-    touch();
     return placed;
   }
 
-  // A layer of crayons spread over the whole floor
   function spawnCarpet(n) {
-    let placed = 0, tries = 0;
-    while (placed < n && tries < n * 20) {
-      tries++;
-      const x = rand(24, W - 24), y = rand(WALL + 20, H - 16);
-      if (blockedAt(x, y)) continue;
-      state.crayons.push({ x, y, a: Math.random() * Math.PI * 2, c: randomShade() });
-      placed++;
-    }
-    touch();
+    for (let i = 0; i < n; i++) addCrayon(rand(-HALF + 0.5, HALF - 0.5), rand(-HALF + 0.5, HALF - 0.5), randomShade());
   }
 
   function deliverPile() {
-    const room = maxFloor() - state.crayons.length;
-    if (room < 20) { toast('The floor is too crowded for another pile. Sort some crayons!'); return false; }
-    const n = Math.min(pileSize(state.upgrades.delivery), room);
-    let cx = 640, cy = 440;
+    const space = maxFloor() - cr.length;
+    if (space < 50) { toast('The room is too full for another pile. Sort some crayons!'); return false; }
+    const n = Math.min(pileSize(state.upgrades.delivery), space);
+    let cx = 0, cz = 0;
     for (let i = 0; i < 40; i++) {
-      cx = rand(180, W - 180); cy = rand(WALL + 110, H - 150);
-      if (!blockedAt(cx, cy, 40)) break;
+      cx = rand(-HALF + 3, HALF - 3); cz = rand(-HALF + 3, HALF - 3);
+      if (!blockedAt(cx, cz, 1.2) && Math.hypot(cx - player.x, cz - player.z) > 2.5) break;
     }
-    spawnPile(cx, cy, n, true);
-    blip(220, 0.25, 'triangle', 0.06);
-    toast(`Another ${n} crayons just got dumped on the floor!`);
+    spawnPile(cx, cz, n, true);
+    blip(180, 0.4, 'triangle', 0.07);
+    toast(`Look out! ${n} more crayons just got dumped in.`);
     return true;
   }
 
-  function crayonAt(px, py) {
-    for (let i = state.crayons.length - 1; i >= 0; i--) {
-      const c = state.crayons[i];
-      const dx = px - c.x, dy = py - c.y;
-      if (dx * dx + dy * dy > 30 * 30) continue;
-      const cos = Math.cos(-c.a), sin = Math.sin(-c.a);
-      const lx = dx * cos - dy * sin, ly = dx * sin + dy * cos;
-      if (Math.abs(lx) <= CL / 2 + 4 && Math.abs(ly) <= CW / 2 + 6) return c;
-    }
-    return null;
+  // ---------------------------------------------------------------------------
+  // Boxes
+  // ---------------------------------------------------------------------------
+  const cardboard = 0xc99a62;
+
+  function roundRect(g, x, y, w, h, r) {
+    g.beginPath();
+    g.moveTo(x + r, y);
+    g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r);
+    g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r);
+    g.closePath();
   }
 
-  // ---------------------------------------------------------------------------
-  // Boxes & shelves
-  // ---------------------------------------------------------------------------
-  function boxAt(px, py, pad = 0) {
-    for (let i = state.boxes.length - 1; i >= 0; i--) {
-      const b = state.boxes[i];
-      if (Math.abs(px - b.x) <= BW / 2 + pad && Math.abs(py - b.y) <= BH / 2 + pad) return b;
-    }
-    return null;
+  function drawBoxLabel(b) {
+    const c = b.labelCanvas;
+    const g = c.getContext('2d');
+    const s = SHADES[b.color];
+    const full = b.count >= capacity();
+    g.clearRect(0, 0, c.width, c.height);
+    g.fillStyle = s.hex;
+    roundRect(g, 6, 6, c.width - 12, 74, 18); g.fill();
+    g.lineWidth = 4; g.strokeStyle = 'rgba(0,0,0,.35)'; g.stroke();
+    g.fillStyle = luminance(s.hex) > 0.6 ? '#2a2a2a' : '#fff';
+    g.font = 'bold 40px "Trebuchet MS", sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.fillText(s.name, c.width / 2, 45, c.width - 30);
+    g.fillStyle = full ? '#2e9e5b' : 'rgba(40,30,30,.85)';
+    roundRect(g, c.width / 2 - 110, 88, 220, 40, 14); g.fill();
+    g.fillStyle = '#fff';
+    g.font = 'bold 26px "Trebuchet MS", sans-serif';
+    g.fillText(full ? (state.upgrades.autoPack ? 'Packing…' : 'FULL! Click to pack') : `${b.count} / ${capacity()}`, c.width / 2, 109, 210);
+    b.labelTex.needsUpdate = true;
   }
 
-  function shelfX(slot) { return 30 + SHELF_W / 2 + slot * ((W - 60 - SHELF_W) / (SHELF_SLOTS - 1)); }
+  function buildBox(b) {
+    const grp = new T.Group();
+    const mat = new T.MeshStandardMaterial({ color: cardboard, roughness: 0.9, emissive: 0x000000 });
+    const t = 0.035;
+    const parts = [
+      [BOX_W, t, BOX_D, 0, t / 2, 0],
+      [BOX_W, BOX_H, t, 0, BOX_H / 2, BOX_D / 2 - t / 2],
+      [BOX_W, BOX_H, t, 0, BOX_H / 2, -BOX_D / 2 + t / 2],
+      [t, BOX_H, BOX_D, BOX_W / 2 - t / 2, BOX_H / 2, 0],
+      [t, BOX_H, BOX_D, -BOX_W / 2 + t / 2, BOX_H / 2, 0],
+    ];
+    for (const [w, h, d, x, y, z] of parts) {
+      const m = new T.Mesh(new T.BoxGeometry(w, h, d), mat);
+      m.position.set(x, y, z);
+      m.castShadow = true; m.receiveShadow = true;
+      grp.add(m);
+    }
+    // colored stripe all the way round, so you can spot the shade from any side
+    const stripeMat = new T.MeshStandardMaterial({ color: SHADES[b.color].hex, roughness: 0.6 });
+    for (const [w, d, x, z] of [[BOX_W + 0.012, 0.012, 0, BOX_D / 2], [BOX_W + 0.012, 0.012, 0, -BOX_D / 2], [0.012, BOX_D + 0.012, BOX_W / 2, 0], [0.012, BOX_D + 0.012, -BOX_W / 2, 0]]) {
+      const stripe = new T.Mesh(new T.BoxGeometry(w, 0.16, d), stripeMat);
+      stripe.position.set(x, BOX_H * 0.62, z);
+      grp.add(stripe);
+    }
+    // the crayons inside rise as the box fills
+    const fillMat = new T.MeshStandardMaterial({ color: SHADES[b.color].hex, roughness: 0.5 });
+    const fill = new T.Mesh(new T.BoxGeometry(BOX_W - 0.1, 1, BOX_D - 0.1), fillMat);
+    fill.visible = false;
+    grp.add(fill);
+    // floating sign above the box
+    b.labelCanvas = document.createElement('canvas');
+    b.labelCanvas.width = 320; b.labelCanvas.height = 136;
+    b.labelTex = new T.CanvasTexture(b.labelCanvas);
+    const sprite = new T.Sprite(new T.SpriteMaterial({ map: b.labelTex, transparent: true }));
+    sprite.scale.set(1.15, 0.49, 1);
+    sprite.position.y = BOX_H + 0.55;
+    grp.add(sprite);
+    Object.assign(b, { group: grp, mat, stripeMat, fillMat, fill });
+    scene.add(grp);
+    refreshBox(b);
+  }
+
+  function refreshBox(b) {
+    b.group.position.set(b.x, 0, b.z);
+    b.group.rotation.y = b.rot * Math.PI / 2;
+    const col = SHADES[b.color].hex;
+    b.stripeMat.color.set(col);
+    b.fillMat.color.set(col);
+    const f = Math.min(1, b.count / capacity());
+    b.fill.visible = f > 0;
+    const h = Math.max(0.02, f * (BOX_H - 0.08));
+    b.fill.scale.y = h;
+    b.fill.position.y = 0.04 + h / 2;
+    drawBoxLabel(b);
+  }
+
+  function addBox(x, z, color, rot = 0, count = 0) {
+    const b = { x, z, color, rot, count, incoming: 0 };
+    state.boxes.push(b);
+    buildBox(b);
+    return b;
+  }
 
   function packBox(b) {
     if (b.count < capacity()) return;
     const v = SHADES[b.color].value;
     const bonus = capacity() * v * 0.5 * coinMult();
     b.count = 0;
-    b.shake = 0.4;
+    refreshBox(b);
     const shelf = state.shelves.find(s => s.packed.length < SHELF_CAP);
-    if (shelf) shelf.packed.push(b.color);
-    earn(bonus, b.x, b.y - 40);
+    if (shelf) { shelf.packed.push(b.color); buildShelf(shelf); }
+    earn(bonus, true);
     blip(520, 0.12, 'square', 0.04); setTimeout(() => blip(780, 0.15, 'square', 0.04), 90);
-    if (!shelf) toast('Box packed! Buy another shelf to display it and earn coins over time.');
+    toast(shelf ? `Packed a box of ${SHADES[b.color].name}! It's up on the shelf.` : 'Box packed! Buy another shelf to display it and earn coins over time.');
   }
 
+  // ---------------------------------------------------------------------------
+  // Shelves on the back wall
+  // ---------------------------------------------------------------------------
+  const shelfGroups = new Map();
+  const plankMat = new T.MeshStandardMaterial({ color: 0xa8703f, roughness: 0.7 });
+  function buildShelf(s) {
+    let g = shelfGroups.get(s);
+    if (g) scene.remove(g);
+    g = new T.Group();
+    const plank = new T.Mesh(new T.BoxGeometry(3.0, 0.08, 0.55), plankMat);
+    plank.position.set(0, 1.6, 0.28);
+    plank.castShadow = true; plank.receiveShadow = true;
+    g.add(plank);
+    for (const bx of [-1.2, 1.2]) {
+      const br = new T.Mesh(new T.BoxGeometry(0.06, 0.3, 0.45), plankMat);
+      br.position.set(bx, 1.42, 0.24);
+      g.add(br);
+    }
+    s.packed.forEach((c, i) => {
+      const pb = new T.Group();
+      const box = new T.Mesh(new T.BoxGeometry(0.5, 0.42, 0.42), new T.MeshStandardMaterial({ color: cardboard, roughness: 0.9 }));
+      box.castShadow = true;
+      pb.add(box);
+      pb.add(new T.Mesh(new T.BoxGeometry(0.1, 0.425, 0.425), new T.MeshStandardMaterial({ color: 0xe9d7b5, roughness: 0.4 })));
+      const label = new T.Mesh(new T.PlaneGeometry(0.32, 0.16), new T.MeshStandardMaterial({ color: SHADES[c].hex, roughness: 0.6 }));
+      label.position.set(0, 0, 0.212);
+      pb.add(label);
+      pb.position.set(-1.16 + i * 0.58, 1.85, 0.28);
+      g.add(pb);
+    });
+    g.position.set(SHELF_SLOTS[s.slot], 0, -HALF);
+    scene.add(g);
+    shelfGroups.set(s, g);
+  }
   function shelfIncome() {
     let v = 0;
     state.shelves.forEach(s => s.packed.forEach(c => { v += SHADES[c].value * 0.15; }));
     return v * coinMult();
   }
 
-  function pushCrayonsOutOf(x, y, w, h) {
-    for (const c of state.crayons) {
-      if (Math.abs(c.x - x) < w / 2 + 6 && Math.abs(c.y - y) < h / 2 + 6) {
-        const dy = c.y < y ? -(h / 2 + 10) : (h / 2 + 10);
-        c.y = clamp(y + dy + rand(-6, 6), WALL + 20, H - 16);
-        if (Math.abs(c.y - y) < h / 2 + 4) c.x = x + (c.x < x ? -1 : 1) * (w / 2 + 12);
-      }
-    }
-    touch();
+  // ---------------------------------------------------------------------------
+  // Decorations
+  // ---------------------------------------------------------------------------
+  const std = (color, extra) => new T.MeshStandardMaterial(Object.assign({ color, roughness: 0.8 }, extra || {}));
+  function mesh(geo, mat, x = 0, y = 0, z = 0, shadow = true) {
+    const m = new T.Mesh(geo, mat);
+    m.position.set(x, y, z);
+    m.castShadow = shadow; m.receiveShadow = true;
+    return m;
   }
 
-  function freeSpot(w, h, wall) {
-    for (let i = 0; i < 300; i++) {
-      const x = rand(w / 2 + 20, W - w / 2 - 20);
-      const y = wall ? rand(h / 2 + 6, WALL - h / 2 - 4) : rand(WALL + h / 2 + 20, H - h / 2 - 10);
-      let ok = true;
-      if (!wall) {
-        for (const b of state.boxes) if (Math.abs(x - b.x) < (BW + w) / 2 + 10 && Math.abs(y - b.y) < (BH + h) / 2 + 10) ok = false;
-        for (const d of state.decor) {
-          const def = DECOR[d.type];
-          if (def.wall || def.under) continue;
-          if (Math.abs(x - d.x) < (def.w + w) / 2 + 10 && Math.abs(y - d.y) < (def.h + h) / 2 + 10) ok = false;
-        }
-        // Prefer clear floor
-        if (ok && i < 200) {
-          let n = 0;
-          for (const c of state.crayons) if (Math.abs(c.x - x) < w / 2 + 10 && Math.abs(c.y - y) < h / 2 + 10) n++;
-          if (n > 3) ok = false;
-        }
+  let lampLights = 0;
+  function buildDecor(d) {
+    const g = new T.Group();
+    let update = null;
+    switch (d.type) {
+      case 'plant': {
+        g.add(mesh(new T.CylinderGeometry(0.26, 0.19, 0.42, 16), std(0xd16d3c), 0, 0.21, 0));
+        g.add(mesh(new T.CylinderGeometry(0.27, 0.27, 0.06, 16), std(0xb4582c), 0, 0.42, 0));
+        const leaf = std(0x3d9a52), leaf2 = std(0x5cbf6c);
+        [[0, 0.75, 0, 0.26], [-0.18, 0.62, 0.05, 0.2], [0.17, 0.66, -0.06, 0.2], [0.05, 0.98, 0.04, 0.18], [-0.08, 0.86, -0.12, 0.17]].forEach(([x, y, z, r], i) => {
+          g.add(mesh(new T.SphereGeometry(r, 14, 10), i % 2 ? leaf2 : leaf, x, y, z));
+        });
+        break;
       }
-      if (ok) return { x, y };
+      case 'rug': {
+        [[1.5, 0xc4566b], [1.25, 0xe88a8a], [0.95, 0xf6d38b], [0.6, 0x7fbf9b]].forEach(([r, c], i) => {
+          const m = mesh(new T.CylinderGeometry(r, r, 0.012, 40), std(c, { roughness: 1 }), 0, 0.006 + i * 0.002, 0, false);
+          m.scale.z = 0.66;
+          g.add(m);
+        });
+        break;
+      }
+      case 'lamp': {
+        g.add(mesh(new T.CylinderGeometry(0.22, 0.25, 0.05, 20), std(0x5b4636), 0, 0.025, 0));
+        g.add(mesh(new T.CylinderGeometry(0.025, 0.025, 1.6, 8), std(0x5b4636), 0, 0.8, 0));
+        g.add(mesh(new T.CylinderGeometry(0.18, 0.32, 0.36, 20, 1, true), std(0xffd98a, { emissive: 0xffc560, emissiveIntensity: 0.6, side: T.DoubleSide }), 0, 1.66, 0));
+        if (lampLights < 4) {
+          lampLights++;
+          const pl = new T.PointLight(0xffd59a, 0.7, 7, 2);
+          pl.position.set(0, 1.55, 0);
+          g.add(pl);
+        }
+        break;
+      }
+      case 'beanbag': {
+        const m1 = mesh(new T.SphereGeometry(0.6, 24, 16), std(0x6a8fd6, { roughness: 0.95 }), 0, 0.3, 0);
+        m1.scale.set(1, 0.55, 1);
+        g.add(m1);
+        const m2 = mesh(new T.SphereGeometry(0.4, 20, 14), std(0x86a8ea, { roughness: 0.95 }), -0.08, 0.55, -0.15);
+        m2.scale.set(1, 0.6, 0.8);
+        g.add(m2);
+        break;
+      }
+      case 'fishbowl': {
+        const wood = std(0x7a5235);
+        g.add(mesh(new T.BoxGeometry(0.8, 0.05, 0.6), wood, 0, 0.6, 0));
+        for (const [x, z] of [[-0.35, -0.25], [0.35, -0.25], [-0.35, 0.25], [0.35, 0.25]]) g.add(mesh(new T.BoxGeometry(0.05, 0.6, 0.05), wood, x, 0.3, z));
+        g.add(mesh(new T.SphereGeometry(0.27, 24, 16), new T.MeshStandardMaterial({ color: 0x7fc8ff, transparent: true, opacity: 0.45, roughness: 0.1 }), 0, 0.9, 0, false));
+        const fish = new T.Group();
+        const fb = mesh(new T.SphereGeometry(0.07, 12, 8), std(0xff8a12, { emissive: 0x331100 }), 0, 0, 0, false);
+        fb.scale.set(1.4, 0.8, 0.6);
+        fish.add(fb);
+        const tail = mesh(new T.ConeGeometry(0.05, 0.08, 8), std(0xff8a12), -0.12, 0, 0, false);
+        tail.rotation.z = Math.PI / 2;
+        fish.add(tail);
+        fish.position.y = 0.88;
+        g.add(fish);
+        update = t => { fish.position.x = Math.sin(t * 0.9) * 0.12; fish.position.z = Math.cos(t * 0.9) * 0.08; fish.rotation.y = -t * 0.9 + Math.PI; };
+        break;
+      }
+      case 'catbed': {
+        const bed = mesh(new T.CylinderGeometry(0.6, 0.55, 0.22, 28), std(0xb36a8f, { roughness: 1 }), 0, 0.11, 0);
+        bed.scale.z = 0.75;
+        g.add(bed);
+        const cush = mesh(new T.CylinderGeometry(0.48, 0.48, 0.06, 28), std(0xf2c4d8, { roughness: 1 }), 0, 0.23, 0, false);
+        cush.scale.z = 0.75;
+        g.add(cush);
+        const fur = std(0xf0a046, { roughness: 1 });
+        const cat = new T.Group();
+        const body = mesh(new T.SphereGeometry(0.26, 18, 12), fur, 0.05, 0, 0);
+        body.scale.set(1.2, 0.6, 0.85);
+        cat.add(body);
+        cat.add(mesh(new T.SphereGeometry(0.14, 16, 12), fur, -0.3, 0.02, 0.06));
+        const e1 = mesh(new T.ConeGeometry(0.05, 0.1, 8), fur, -0.34, 0.15, 0.0); e1.rotation.z = 0.3; cat.add(e1);
+        const e2 = mesh(new T.ConeGeometry(0.05, 0.1, 8), fur, -0.3, 0.14, 0.13); e2.rotation.x = 0.4; cat.add(e2);
+        const tailM = mesh(new T.TorusGeometry(0.22, 0.035, 8, 20, Math.PI * 0.9), fur, 0.12, -0.05, 0.05);
+        tailM.rotation.x = Math.PI / 2;
+        cat.add(tailM);
+        cat.position.y = 0.38;
+        g.add(cat);
+        update = t => { body.scale.y = 0.6 + Math.sin(t * 1.8) * 0.03; };
+        break;
+      }
+      case 'poster': {
+        const tex = canvasTex(256, 340, (c, w) => {
+          c.fillStyle = '#fffaf2'; c.fillRect(0, 0, w, 340);
+          ['#ff6b6b', '#ff8a12', '#ffcc00', '#2fb344', '#1d6fd8', '#8e44ad'].forEach((col, i) => {
+            c.strokeStyle = col; c.lineWidth = 16;
+            c.beginPath(); c.arc(w / 2, 200, 110 - i * 16, Math.PI, 0); c.stroke();
+          });
+          c.fillStyle = '#3a2e2a'; c.font = 'bold 30px "Trebuchet MS", sans-serif'; c.textAlign = 'center';
+          c.fillText('Every shade', w / 2, 260); c.fillText('has a home', w / 2, 298);
+        });
+        g.add(mesh(new T.PlaneGeometry(1.0, 1.33), new T.MeshStandardMaterial({ map: tex, roughness: 0.9 }), 0, 0, 0.01, false));
+        break;
+      }
+      case 'clock': {
+        const rim = mesh(new T.CylinderGeometry(0.4, 0.4, 0.06, 32), std(0x8a5a35), 0, 0, 0.03, false);
+        rim.rotation.x = Math.PI / 2;
+        g.add(rim);
+        g.add(mesh(new T.CircleGeometry(0.34, 32), std(0xfffaf0), 0, 0, 0.065, false));
+        const hand = (len, w) => {
+          const p = new T.Group();
+          p.add(mesh(new T.BoxGeometry(w, len, 0.01), std(0x3a2e2a), 0, len / 2, 0, false));
+          p.position.z = 0.075;
+          g.add(p);
+          return p;
+        };
+        const hh = hand(0.18, 0.035), mh = hand(0.27, 0.022);
+        update = () => {
+          const now = new Date();
+          hh.rotation.z = -((now.getHours() % 12) + now.getMinutes() / 60) / 12 * TAU;
+          mh.rotation.z = -(now.getMinutes() + now.getSeconds() / 60) / 60 * TAU;
+        };
+        break;
+      }
+      case 'window': {
+        const sky = canvasTex(256, 200, (c, w, h) => {
+          const gr = c.createLinearGradient(0, 0, 0, h);
+          gr.addColorStop(0, '#6fbaf0'); gr.addColorStop(1, '#d8f0ff');
+          c.fillStyle = gr; c.fillRect(0, 0, w, h);
+          c.fillStyle = '#fff';
+          [[60, 60], [170, 90]].forEach(([x, y]) => { [0, 22, 44].forEach((o, i) => { c.beginPath(); c.arc(x + o, y - (i === 1 ? 10 : 0), 20, 0, TAU); c.fill(); }); });
+          c.fillStyle = '#7ccf73'; c.beginPath(); c.ellipse(w / 2, h + 40, w, 80, 0, 0, TAU); c.fill();
+        });
+        g.add(mesh(new T.PlaneGeometry(1.7, 1.3), new T.MeshBasicMaterial({ map: sky }), 0, 0, 0.01, false));
+        const frame = std(0xfffaf0);
+        g.add(mesh(new T.BoxGeometry(1.86, 0.08, 0.08), frame, 0, 0.69, 0.04));
+        g.add(mesh(new T.BoxGeometry(1.86, 0.08, 0.08), frame, 0, -0.69, 0.04));
+        g.add(mesh(new T.BoxGeometry(0.08, 1.46, 0.08), frame, 0.89, 0, 0.04));
+        g.add(mesh(new T.BoxGeometry(0.08, 1.46, 0.08), frame, -0.89, 0, 0.04));
+        g.add(mesh(new T.BoxGeometry(0.05, 1.3, 0.05), frame, 0, 0, 0.04));
+        g.add(mesh(new T.BoxGeometry(1.7, 0.05, 0.05), frame, 0, 0, 0.04));
+        g.add(mesh(new T.BoxGeometry(2.0, 0.08, 0.2), frame, 0, -0.74, 0.1));
+        const curtain = std(0xf4b6c2, { roughness: 1 });
+        g.add(mesh(new T.BoxGeometry(0.3, 1.7, 0.04), curtain, -1.1, 0.05, 0.08));
+        g.add(mesh(new T.BoxGeometry(0.3, 1.7, 0.04), curtain, 1.1, 0.05, 0.08));
+        break;
+      }
+      case 'lights': {
+        const cols = [0xff6b6b, 0xffcc00, 0x2fb344, 0x8ecdf7, 0xff6fae, 0xcdb0f7];
+        const bulbs = [];
+        const n = 16;
+        for (let i = 0; i < n; i++) {
+          const t = i / (n - 1);
+          const x = -1.6 + t * 3.2;
+          const y = -Math.sin((t * 2 % 1) * Math.PI) * 0.18 - 0.05;
+          const mat = new T.MeshStandardMaterial({ color: cols[i % cols.length], emissive: cols[i % cols.length], emissiveIntensity: 0.8 });
+          const b = mesh(new T.SphereGeometry(0.045, 10, 8), mat, x, y, 0.05, false);
+          b.scale.y = 1.4;
+          g.add(b);
+          bulbs.push(mat);
+        }
+        g.add(mesh(new T.BoxGeometry(3.3, 0.01, 0.01), std(0x4a5a3a), 0, 0, 0.04, false));
+        update = t => bulbs.forEach((m, i) => { m.emissiveIntensity = 0.45 + 0.45 * Math.sin(t * 3 + i * 1.7); });
+        break;
+      }
     }
-    return { x: W / 2, y: wall ? WALL / 2 : H - 80 };
+    d.group = g;
+    d.update = update;
+    scene.add(g);
+    refreshDecor(d);
+  }
+
+  function refreshDecor(d) {
+    d.group.position.set(d.x, d.y || 0, d.z);
+    d.group.rotation.y = d.ry || 0;
   }
 
   // ---------------------------------------------------------------------------
-  // Player hand
+  // Player
   // ---------------------------------------------------------------------------
-  let hand = [];                // crayons currently held
-  let mouse = { x: W / 2, y: H / 2, inside: false };
-  let pressed = null;           // { x, y, mode }
-  let editMode = false;
-  let selected = null;          // { kind: 'box'|'decor', obj }
-  let dragOff = null;
+  const player = { x: 0, z: 9.5, yaw: 0, pitch: -0.3, eye: 1.65 };
+  const keys = new Set();
+  let locked = false;
+  const joy = { x: 0, y: 0 };
+
+  function updatePlayer(dt) {
+    let fx = 0, fz = 0;
+    if (keys.has('KeyW') || keys.has('ArrowUp')) fz += 1;
+    if (keys.has('KeyS') || keys.has('ArrowDown')) fz -= 1;
+    if (keys.has('KeyD') || keys.has('ArrowRight')) fx += 1;
+    if (keys.has('KeyA') || keys.has('ArrowLeft')) fx -= 1;
+    fx += joy.x; fz += -joy.y;
+    const len = Math.hypot(fx, fz);
+    if (len > 0.01) {
+      const sp = walkSpeed(state.upgrades.speed) * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1.7 : 1) * Math.min(1, len) / len;
+      const sy = Math.sin(player.yaw), cy = Math.cos(player.yaw);
+      player.x += (fx * cy - fz * sy) * sp * dt;
+      player.z += (-fx * sy - fz * cy) * sp * dt;
+    }
+    player.x = clamp(player.x, -HALF + 0.35, HALF - 0.35);
+    player.z = clamp(player.z, -HALF + 0.35, HALF - 0.35);
+    // don't walk through boxes
+    for (const b of state.boxes) {
+      if (placing && placing.obj === b) continue;
+      const [hw, hd] = boxHalf(b);
+      const dx = player.x - b.x, dz = player.z - b.z;
+      const ox = hw + 0.3 - Math.abs(dx), oz = hd + 0.3 - Math.abs(dz);
+      if (ox > 0 && oz > 0) {
+        if (ox < oz) player.x += Math.sign(dx || 1) * ox; else player.z += Math.sign(dz || 1) * oz;
+      }
+    }
+    // wade up onto piles a little
+    const target = 1.65 + Math.min(1.2, topAt(player.x, player.z, 0.35)) * 0.85;
+    player.eye += (target - player.eye) * Math.min(1, dt * 6);
+    camera.position.set(player.x, player.eye, player.z);
+    camera.rotation.set(player.pitch, player.yaw, 0);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Aiming
+  // ---------------------------------------------------------------------------
+  const raycaster = new T.Raycaster();
+  const CENTER = new T.Vector2(0, 0);
+  const mouseNDC = new T.Vector2(0, 0);
+  let aim = { type: null };
+
+  function rayCrayon(o, d, maxT) {
+    let best = null, bt = maxT;
+    const ox = o.x, oy = o.y, oz = o.z, dx = d.x, dy = d.y, dz = d.z;
+    for (let i = 0; i < cr.length; i++) {
+      const c = cr[i];
+      if (c.delay > 0 || c.dy > 0.5) continue;
+      const cx = c.x - ox, cy = c.y + c.dy - oy, cz = c.z - oz;
+      const t0 = cx * dx + cy * dy + cz * dz;
+      if (t0 < 0 || t0 > bt + 0.3) continue;
+      const perp2 = cx * cx + cy * cy + cz * cz - t0 * t0;
+      if (perp2 > 0.09) continue;
+      // closest approach between the ray and the crayon's center line
+      const wx = c.ax * CL, wy = c.ay * CL, wz = c.az * CL;
+      const rx = -cx + wx / 2, ry = -cy + wy / 2, rz = -cz + wz / 2; // ray origin minus segment start
+      const b = dx * wx + dy * wy + dz * wz;
+      const cc = wx * wx + wy * wy + wz * wz;
+      const dd = dx * rx + dy * ry + dz * rz;
+      const e = wx * rx + wy * ry + wz * rz;
+      const den = cc - b * b;
+      let u = den > 1e-9 ? (e - b * dd) / den : 0;
+      u = clamp(u, 0, 1);
+      const s = b * u - dd;
+      if (s < 0) continue;
+      const px = rx + dx * s - wx * u, py = ry + dy * s - wy * u, pz = rz + dz * s - wz * u;
+      if (px * px + py * py + pz * pz < (CR * 1.6) ** 2 && s < bt) { bt = s; best = c; }
+    }
+    return best ? { obj: best, t: bt } : null;
+  }
+
+  function rayAABB(o, d, lo, hi) {
+    let t0 = 0, t1 = Infinity;
+    const oo = [o.x, o.y, o.z], dd = [d.x, d.y, d.z];
+    for (let k = 0; k < 3; k++) {
+      if (Math.abs(dd[k]) < 1e-9) { if (oo[k] < lo[k] || oo[k] > hi[k]) return null; continue; }
+      let a = (lo[k] - oo[k]) / dd[k], b = (hi[k] - oo[k]) / dd[k];
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a); t1 = Math.min(t1, b);
+      if (t0 > t1) return null;
+    }
+    return t0;
+  }
+
+  function rayBox(o, d, maxT) {
+    let best = null, bt = maxT;
+    for (const b of state.boxes) {
+      if (placing && placing.obj === b) continue;
+      const [hw, hd] = boxHalf(b);
+      const t = rayAABB(o, d, [b.x - hw, 0, b.z - hd], [b.x + hw, BOX_H + 0.85, b.z + hd]);
+      if (t !== null && t < bt) { bt = t; best = b; }
+    }
+    return best ? { obj: best, t: bt } : null;
+  }
+
+  function rayDecor(o, d, maxT) {
+    let best = null, bt = maxT;
+    for (const dc of state.decor) {
+      if (placing && placing.obj === dc) continue;
+      const def = DECOR[dc.type];
+      if (def.under) continue;
+      const cy = def.wall ? dc.y : def.cy;
+      const cx = dc.x - o.x, cyy = cy - o.y, cz = dc.z - o.z;
+      const t0 = cx * d.x + cyy * d.y + cz * d.z;
+      if (t0 < 0) continue;
+      const perp2 = cx * cx + cyy * cyy + cz * cz - t0 * t0;
+      if (perp2 < def.r * def.r && t0 < bt) { bt = t0; best = dc; }
+    }
+    return best ? { obj: best, t: bt } : null;
+  }
+
+  function rugAt(x, z) {
+    for (const dc of state.decor) {
+      if (!DECOR[dc.type].under) continue;
+      const lx = x - dc.x, lz = z - dc.z;
+      const c = Math.cos(-(dc.ry || 0)), s = Math.sin(-(dc.ry || 0));
+      const rx = lx * c - lz * s, rz = lx * s + lz * c;
+      if ((rx / 1.5) ** 2 + (rz / 1.0) ** 2 < 1) return dc;
+    }
+    return null;
+  }
+
+  function rayFloor(o, d) {
+    if (d.y >= -1e-4) return null;
+    const t = -o.y / d.y;
+    const x = o.x + d.x * t, z = o.z + d.z * t;
+    if (Math.abs(x) > HALF || Math.abs(z) > HALF) return null;
+    return { t, point: new T.Vector3(x, 0, z) };
+  }
+
+  function rayWall(o, d) {
+    let best = null;
+    const tryPlane = (t, ry) => {
+      if (t <= 0) return;
+      const p = new T.Vector3().copy(o).addScaledVector(d, t);
+      if (p.y < 0 || p.y > WALL_H || Math.abs(p.x) > HALF + 0.01 || Math.abs(p.z) > HALF + 0.01) return;
+      if (!best || t < best.t) best = { t, point: p, ry };
+    };
+    if (d.z < 0) tryPlane((-HALF - o.z) / d.z, 0);
+    if (d.z > 0) tryPlane((HALF - o.z) / d.z, Math.PI);
+    if (d.x < 0) tryPlane((-HALF - o.x) / d.x, Math.PI / 2);
+    if (d.x > 0) tryPlane((HALF - o.x) / d.x, -Math.PI / 2);
+    return best;
+  }
+
+  function updateAim() {
+    raycaster.setFromCamera(locked ? CENTER : mouseNDC, camera);
+    const o = raycaster.ray.origin, d = raycaster.ray.direction;
+    const floor = rayFloor(o, d);
+    if (placing) { aim = { type: 'place', floor, wall: rayWall(o, d) }; return; }
+    const cands = [];
+    const cHit = rayCrayon(o, d, PICK_DIST);
+    if (cHit) cands.push({ type: 'crayon', ...cHit });
+    const bHit = rayBox(o, d, TOSS_DIST);
+    if (bHit) cands.push({ type: 'box', ...bHit });
+    const dHit = rayDecor(o, d, 8);
+    if (dHit) cands.push({ type: 'decor', ...dHit });
+    if (floor) cands.push({ type: 'floor', t: floor.t, point: floor.point });
+    cands.sort((a, b) => a.t - b.t);
+    aim = cands[0] || { type: null };
+    // While holding crayons, a crayon of another shade in the way counts as "drop here"
+    if (hand.n && aim.type === 'crayon' && aim.obj.c !== hand.c) {
+      aim = { type: 'floor', t: aim.t, point: new T.Vector3().copy(o).addScaledVector(d, aim.t) };
+    }
+    if (aim.type === 'floor') aim.rug = rugAt(aim.point.x, aim.point.z);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Hand, tossing, flights
+  // ---------------------------------------------------------------------------
+  const hand = { c: -1, n: 0 };
+  const handGroup = new T.Group();
+  handGroup.position.set(0.22, -0.17, -0.42);
+  handGroup.scale.setScalar(0.32);
+  camera.add(handGroup);
+  const handMeshes = [];
+  for (let i = 0; i < 9; i++) {
+    const m = new T.Mesh(crayonGeo, shadeMats[0]);
+    m.visible = false;
+    m.rotation.set(0.15, Math.PI / 2 + 0.35, 1.0 + (i - 4) * 0.05);
+    m.position.set((i - 4) * 0.035, -Math.abs(i - 4) * 0.008, 0);
+    handGroup.add(m);
+    handMeshes.push(m);
+  }
+  function refreshHand() {
+    const show = Math.min(hand.n, 9);
+    handMeshes.forEach((m, i) => {
+      m.visible = i < show;
+      if (m.visible) m.material = shadeMats[hand.c];
+    });
+  }
 
   function pickUp(first) {
     const n = handSize(state.upgrades.hand);
-    const r2 = reach(state.upgrades.reach) ** 2;
+    if (hand.n && hand.c !== first.c) return;
+    const space = n - hand.n;
+    if (space <= 0) { toast(`Your hands are full (${n}). Toss them into a box!`); return; }
     const picked = [first];
-    const candidates = [];
-    for (const c of state.crayons) {
-      if (c === first || c.c !== first.c || c.claimed) continue;
-      const d = dist2(c.x, c.y, first.x, first.y);
-      if (d <= r2) candidates.push([d, c]);
+    const r = scoop(state.upgrades.reach);
+    if (space > 1) {
+      const cands = [];
+      forNear(first.x, first.z, r, o => {
+        if (o === first || o.c !== first.c || o.delay > 0) return;
+        const d2 = (o.x - first.x) ** 2 + (o.z - first.z) ** 2;
+        if (d2 < r * r) cands.push([d2 - o.y * 0.2, o]); // prefer crayons near the top
+      });
+      cands.sort((a, b) => a[0] - b[0]);
+      for (let i = 0; i < cands.length && picked.length < space; i++) picked.push(cands[i][1]);
     }
-    candidates.sort((a, b) => a[0] - b[0]);
-    for (let i = 0; i < candidates.length && picked.length < n; i++) picked.push(candidates[i][1]);
-    const set = new Set(picked);
-    state.crayons = state.crayons.filter(c => !set.has(c));
-    picked.forEach(c => { c.claimed = null; c.drop = 0; });
-    hand = picked;
-    touch();
-    blip(440 + picked.length * 20, 0.06, 'sine', 0.06);
+    // take the top-most first so the pile collapses sensibly
+    picked.sort((a, b) => b.y - a.y).forEach(removeCrayon);
+    hand.c = first.c;
+    hand.n += picked.length;
+    refreshHand();
+    blip(440 + picked.length * 25, 0.07, 'sine', 0.06);
   }
 
-  function dropHandOnFloor(x, y) {
-    hand.forEach((c, i) => {
-      c.x = clamp(x + rand(-14, 14) * Math.sqrt(i + 1) * 0.6, 24, W - 24);
-      c.y = clamp(y + rand(-10, 10) * Math.sqrt(i + 1) * 0.6, WALL + 20, H - 16);
-      c.a = Math.random() * Math.PI * 2;
-      state.crayons.push(c);
-    });
-    hand = [];
-    touch();
+  const flights = [];
+  const handWorld = new T.Vector3();
+  function startFlight(c, from, to, delay, onLand) {
+    const m = new T.Mesh(crayonGeo, shadeMats[c]);
+    m.castShadow = true;
+    m.visible = false;
+    scene.add(m);
+    const dist = from.distanceTo(to);
+    flights.push({ m, c, from: from.clone(), to: to.clone(), t: -delay, dur: 0.35 + dist * 0.05, h: 0.4 + dist * 0.1, onLand, spin: rand(8, 14) });
   }
 
-  function depositInto(box, items, x, y) {
-    const space = capacity() - box.count;
-    if (space <= 0) return 0;
-    const n = Math.min(space, items.length);
-    box.count += n;
-    state.sorted += n;
-    const amount = n * SHADES[box.color].value * coinMult();
-    earn(amount, x ?? box.x, (y ?? box.y) - 30);
-    box.bump = 0.25;
-    for (let i = 0; i < Math.min(8, n * 2); i++) {
-      sparks.push({ x: box.x + rand(-20, 20), y: box.y - 20, vx: rand(-60, 60), vy: rand(-140, -60), t: 0, col: SHADES[box.color].hex });
+  function tossToBox(b) {
+    handGroup.getWorldPosition(handWorld);
+    const n = hand.n, c = hand.c;
+    let warned = false;
+    for (let i = 0; i < n; i++) {
+      const to = new T.Vector3(b.x + rand(-0.25, 0.25), BOX_H * 0.6, b.z + rand(-0.18, 0.18));
+      startFlight(c, handWorld, to, i * 0.05, () => {
+        if (b.color === c && b.count < capacity() && state.boxes.includes(b)) {
+          b.count++;
+          state.sorted++;
+          earn(SHADES[c].value * coinMult(), true);
+          refreshBox(b);
+          blip(620 + Math.random() * 200, 0.06, 'sine', 0.05);
+          if (b.count >= capacity() && state.upgrades.autoPack) setTimeout(() => packBox(b), 400);
+        } else {
+          // bounce off onto the floor next to the box
+          const a = Math.random() * TAU;
+          addCrayon(b.x + Math.cos(a) * 0.9, b.z + Math.sin(a) * 0.75, c);
+          if (!warned) {
+            warned = true;
+            blip(150, 0.18, 'sawtooth', 0.04);
+            toast(b.color !== c ? `Nope! Those are ${SHADES[c].name}, not ${SHADES[b.color].name}.` : 'That box is full! Click it to pack it up.');
+          }
+        }
+      });
     }
-    if (box.count >= capacity() && state.upgrades.autoPack) setTimeout(() => packBox(box), 350);
-    return n;
+    hand.n = 0; hand.c = -1;
+    refreshHand();
   }
 
-  function tryDeposit(px, py) {
-    const box = boxAt(px, py, 14);
-    if (!box) return false;
-    const shadeIdx = hand[0].c;
-    if (box.color !== shadeIdx) {
-      box.shake = 0.35;
-      blip(160, 0.15, 'sawtooth', 0.04);
-      toast(`Nope! That's ${SHADES[shadeIdx].name}, not ${SHADES[box.color].name}.`);
-      return true;
+  function dropAt(point, quiet = false) {
+    handGroup.getWorldPosition(handWorld);
+    const c = hand.c;
+    for (let i = 0; i < hand.n; i++) {
+      const to = point.clone().add(new T.Vector3(rand(-0.25, 0.25), 0, rand(-0.25, 0.25)));
+      to.y = Math.max(CR, topAt(to.x, to.z, 0.2));
+      startFlight(c, handWorld, to, i * 0.03, () => addCrayon(to.x, to.z, c));
     }
-    if (box.count >= capacity()) {
-      box.shake = 0.3;
-      toast(state.upgrades.autoPack ? 'This box is being packed…' : 'That box is full! Click it to pack it up.');
-      return true;
+    hand.n = 0; hand.c = -1;
+    refreshHand();
+    if (!quiet) blip(300, 0.08, 'triangle', 0.04);
+  }
+
+  function updateFlights(dt) {
+    for (let i = flights.length - 1; i >= 0; i--) {
+      const f = flights[i];
+      f.t += dt;
+      if (f.t < 0) continue;
+      const k = Math.min(1, f.t / f.dur);
+      f.m.visible = true;
+      f.m.position.lerpVectors(f.from, f.to, k);
+      f.m.position.y += Math.sin(k * Math.PI) * f.h;
+      f.m.rotation.set(k * f.spin, k * f.spin * 0.6, 0);
+      if (k >= 1) {
+        scene.remove(f.m);
+        flights.splice(i, 1);
+        f.onLand();
+      }
     }
-    const n = depositInto(box, hand);
-    hand.splice(0, n);
-    blip(660 + Math.random() * 120, 0.08, 'sine', 0.07);
-    return true;
   }
 
   // ---------------------------------------------------------------------------
   // Sortbots
   // ---------------------------------------------------------------------------
-  let bots = [];
+  const bots = [];
+  function buildBot() {
+    const g = new T.Group();
+    g.add(mesh(new T.SphereGeometry(0.3, 20, 14), std(0xe9edf2, { roughness: 0.4 }), 0, 0.3, 0));
+    g.add(mesh(new T.BoxGeometry(0.34, 0.14, 0.1), std(0x2d3a4a, { roughness: 0.3 }), 0, 0.36, 0.26));
+    const eye = new T.MeshStandardMaterial({ color: 0x7ff0c0, emissive: 0x7ff0c0, emissiveIntensity: 0.9 });
+    g.add(mesh(new T.SphereGeometry(0.03, 8, 6), eye, -0.07, 0.36, 0.31, false));
+    g.add(mesh(new T.SphereGeometry(0.03, 8, 6), eye, 0.07, 0.36, 0.31, false));
+    g.add(mesh(new T.CylinderGeometry(0.01, 0.01, 0.18, 6), std(0x9aa6b2), 0, 0.66, 0));
+    g.add(mesh(new T.SphereGeometry(0.04, 8, 6), std(0xff6b6b, { emissive: 0xff3030, emissiveIntensity: 0.6 }), 0, 0.76, 0, false));
+    const carry = new T.Mesh(crayonGeo, shadeMats[0]);
+    carry.position.set(0, 0.45, 0.33);
+    carry.rotation.y = Math.PI / 2;
+    carry.visible = false;
+    g.add(carry);
+    scene.add(g);
+    return { g, carry };
+  }
   function syncBots() {
     while (bots.length < state.upgrades.bots) {
-      bots.push({ x: rand(200, W - 200), y: rand(WALL + 60, H - 60), state: 'idle', target: null, box: null, carry: [], wait: 0, face: 1, bob: Math.random() * 6 });
+      const { g, carry } = buildBot();
+      bots.push({ g, carryMesh: carry, x: rand(-6, 6), z: rand(-6, 6), y: 0, state: 'idle', target: null, box: null, carry: [], wait: rand(0, 1), bob: Math.random() * 6 });
     }
   }
 
-  function boxWithSpace(shadeIdx, x, y) {
+  function boxWithSpace(c, x, z) {
     let best = null, bd = Infinity;
     for (const b of state.boxes) {
-      if (b.color !== shadeIdx || b.count + (b.incoming || 0) >= capacity()) continue;
-      const d = dist2(x, y, b.x, b.y);
+      if (b.color !== c || b.count + b.incoming >= capacity()) continue;
+      if (placing && placing.obj === b) continue;
+      const d = (b.x - x) ** 2 + (b.z - z) ** 2;
       if (d < bd) { bd = d; best = b; }
     }
     return best;
   }
 
   function updateBot(bot, dt) {
-    const speed = 90 + state.upgrades.botSpeed * 35;
+    const speed = 1.6 + state.upgrades.botSpeed * 0.6;
     bot.bob += dt * 8;
-    if (bot.wait > 0) { bot.wait -= dt; return; }
-    const moveTo = (tx, ty) => {
-      const dx = tx - bot.x, dy = ty - bot.y;
-      const d = Math.hypot(dx, dy);
-      if (d < 4) return true;
+    const moveTo = (tx, tz) => {
+      const dx = tx - bot.x, dz = tz - bot.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.12) return true;
       const s = Math.min(d, speed * dt);
-      bot.x += dx / d * s; bot.y += dy / d * s;
-      if (Math.abs(dx) > 1) bot.face = Math.sign(dx);
+      bot.x += dx / d * s; bot.z += dz / d * s;
+      bot.g.rotation.y = Math.atan2(dx, dz);
       return false;
     };
-
-    if (bot.state === 'idle') {
-      // Find the nearest crayon that has a box with room
+    if (bot.wait > 0) bot.wait -= dt;
+    else if (bot.state === 'idle') {
+      const ok = new Set();
+      state.boxes.forEach(b => { if (b.count + b.incoming < capacity()) ok.add(b.color); });
       let best = null, bd = Infinity;
-      for (const c of state.crayons) {
-        if (c.claimed || c.drop > 0) continue;
-        const d = dist2(bot.x, bot.y, c.x, c.y);
-        if (d < bd && boxWithSpace(c.c, c.x, c.y)) { bd = d; best = c; }
+      if (ok.size) for (const c of cr) {
+        if (c.claimed || c.delay > 0 || !ok.has(c.c)) continue;
+        const d = (c.x - bot.x) ** 2 + (c.z - bot.z) ** 2;
+        if (d < bd) { bd = d; best = c; }
       }
-      if (!best) { bot.wait = 1; return; }
-      best.claimed = bot;
-      bot.target = best;
-      bot.state = 'toCrayon';
-    }
-
-    if (bot.state === 'toCrayon') {
+      if (!best) bot.wait = 1.5;
+      else { best.claimed = true; bot.target = best; bot.state = 'toCrayon'; }
+    } else if (bot.state === 'toCrayon') {
       const t = bot.target;
-      if (!t || !state.crayons.includes(t)) { bot.state = 'idle'; bot.target = null; return; }
-      if (moveTo(t.x, t.y - 6)) {
-        const box = boxWithSpace(t.c, t.x, t.y);
-        if (!box) { t.claimed = null; bot.state = 'idle'; return; }
-        const want = Math.min(botCarry(state.upgrades.botSpeed), capacity() - box.count - (box.incoming || 0));
-        const grab = [t];
-        for (const c of state.crayons) {
-          if (grab.length >= want) break;
-          if (c !== t && c.c === t.c && !c.claimed && c.drop <= 0 && dist2(c.x, c.y, t.x, t.y) < 60 * 60) grab.push(c);
+      if (!t || t.dead) { bot.state = 'idle'; bot.target = null; }
+      else if (moveTo(t.x, t.z)) {
+        const box = boxWithSpace(t.c, t.x, t.z);
+        if (!box) { t.claimed = false; bot.state = 'idle'; }
+        else {
+          const want = Math.min(botCarry(state.upgrades.botSpeed), capacity() - box.count - box.incoming);
+          const grab = [t];
+          forNear(t.x, t.z, 0.5, o => {
+            if (grab.length < want && o !== t && o.c === t.c && !o.claimed && o.delay <= 0) grab.push(o);
+          });
+          grab.sort((a, b) => b.y - a.y).forEach(removeCrayon);
+          bot.carry = grab.map(o => o.c);
+          bot.box = box;
+          box.incoming += grab.length;
+          bot.target = null;
+          bot.state = 'toBox';
+          bot.wait = 0.3;
+          bot.carryMesh.material = shadeMats[t.c];
+          bot.carryMesh.visible = true;
         }
-        const set = new Set(grab);
-        state.crayons = state.crayons.filter(c => !set.has(c));
-        touch();
-        bot.carry = grab;
-        bot.box = box;
-        box.incoming = (box.incoming || 0) + grab.length;
-        bot.target = null;
-        bot.state = 'toBox';
-        bot.wait = 0.2;
       }
-    }
-
-    if (bot.state === 'toBox') {
+    } else if (bot.state === 'toBox') {
       const box = bot.box;
       if (!state.boxes.includes(box)) {
-        bot.carry.forEach(c => { c.x = bot.x + rand(-8, 8); c.y = bot.y + rand(-8, 8); c.claimed = null; state.crayons.push(c); });
-        bot.carry = []; bot.state = 'idle'; touch(); return;
-      }
-      if (moveTo(box.x, box.y + BH / 2 + 14)) {
-        box.incoming = Math.max(0, (box.incoming || 0) - bot.carry.length);
-        if (box.color === bot.carry[0].c) {
-          const n = depositInto(box, bot.carry, box.x, box.y);
-          bot.carry.splice(0, n);
+        bot.carry.forEach(c => addCrayon(bot.x, bot.z, c));
+        bot.carry = []; bot.state = 'idle'; bot.carryMesh.visible = false;
+      } else {
+        const [, hd] = boxHalf(box);
+        if (moveTo(box.x, box.z + (bot.z > box.z ? hd + 0.4 : -hd - 0.4))) {
+          box.incoming = Math.max(0, box.incoming - bot.carry.length);
+          for (const c of bot.carry) {
+            if (box.color === c && box.count < capacity()) {
+              box.count++; state.sorted++;
+              earn(SHADES[c].value * coinMult(), false);
+            } else addCrayon(bot.x, bot.z, c);
+          }
+          refreshBox(box);
+          if (box.count >= capacity() && state.upgrades.autoPack) setTimeout(() => packBox(box), 400);
+          bot.carry = []; bot.box = null; bot.state = 'idle'; bot.wait = 0.3;
+          bot.carryMesh.visible = false;
         }
-        bot.carry.forEach(c => { c.x = bot.x + rand(-12, 12); c.y = bot.y + rand(4, 16); c.claimed = null; state.crayons.push(c); });
-        bot.carry = [];
-        touch();
-        bot.box = null;
-        bot.state = 'idle';
-        bot.wait = 0.25;
       }
     }
+    const ground = topAt(bot.x, bot.z, 0.25);
+    bot.y += (ground - bot.y) * Math.min(1, dt * 8);
+    bot.g.position.set(bot.x, bot.y + Math.abs(Math.sin(bot.bob)) * 0.03, bot.z);
   }
 
   // ---------------------------------------------------------------------------
-  // Effects
+  // Moving / placing furniture
   // ---------------------------------------------------------------------------
-  let floaters = [];
-  let sparks = [];
-  let time = 0;
+  let placing = null; // { kind: 'box'|'decor', obj, isNew, prev }
 
+  function startPlacing(kind, obj, isNew) {
+    if (hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
+    placing = { kind, obj, isNew, prev: { x: obj.x, y: obj.y, z: obj.z, rot: obj.rot, ry: obj.ry } };
+  }
+
+  function updatePlacing() {
+    if (!placing) return;
+    const o = placing.obj;
+    if (placing.kind === 'decor' && DECOR[o.type].wall) {
+      const w = aim.wall;
+      if (w && w.t < 14) {
+        o.ry = w.ry;
+        o.x = clamp(w.point.x + Math.sin(w.ry) * 0.02, -HALF + 1, HALF - 1);
+        o.z = clamp(w.point.z + Math.cos(w.ry) * 0.02, -HALF + 1, HALF - 1);
+        o.y = clamp(w.point.y, 1.0, WALL_H - 0.8);
+      }
+      refreshDecor(o);
+      return;
+    }
+    let p = aim.floor && aim.floor.t < 12 ? aim.floor.point : null;
+    if (!p) p = new T.Vector3(player.x - Math.sin(player.yaw) * 2.5, 0, player.z - Math.cos(player.yaw) * 2.5);
+    o.x = clamp(p.x, -HALF + 0.7, HALF - 0.7);
+    o.z = clamp(p.z, -HALF + 0.7, HALF - 0.7);
+    if (placing.kind === 'box') refreshBox(o); else refreshDecor(o);
+  }
+
+  function finishPlacing() {
+    const o = placing.obj;
+    const kind = placing.kind;
+    placing = null;
+    // Crayons under the new spot get shoved aside
+    let r = 0;
+    if (kind === 'box') r = Math.max(BOX_W, BOX_D) / 2 + 0.2;
+    else if (!DECOR[o.type].wall && !DECOR[o.type].under) r = DECOR[o.type].r + 0.15;
+    if (r) {
+      const list = [];
+      forNear(o.x, o.z, r + 0.2, c => { if (blockedAt(c.x, c.z, 0.05)) list.push(c); });
+      list.sort((a, b) => b.y - a.y).forEach(c => { removeCrayon(c); });
+      list.forEach(c => addCrayon(c.x, c.z, c.c));
+    }
+    blip(500, 0.08, 'triangle', 0.05);
+    save();
+  }
+
+  function cancelPlacing() {
+    if (!placing) return;
+    if (placing.isNew) { finishPlacing(); return; }
+    const o = placing.obj;
+    Object.assign(o, placing.prev);
+    const kind = placing.kind;
+    placing = null;
+    if (kind === 'box') refreshBox(o); else refreshDecor(o);
+  }
+
+  function putAway() {
+    if (!placing || placing.kind !== 'decor') return;
+    const d = placing.obj;
+    scene.remove(d.group);
+    state.decor = state.decor.filter(x => x !== d);
+    const refund = Math.floor(DECOR[d.type].price / 2);
+    state.coins += refund;
+    toast(`Put away the ${DECOR[d.type].name} (+🪙${refund}).`);
+    placing = null;
+    save();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Effects: sound, toasts, coin floaters
+  // ---------------------------------------------------------------------------
   let muted = false;
   let actx = null;
   function blip(freq, dur, type = 'sine', vol = 0.06) {
@@ -537,7 +1328,7 @@
     } catch (e) { /* audio not available */ }
   }
 
-  const toastEl = document.getElementById('toast');
+  const toastEl = $('toast');
   function toast(msg) {
     const d = document.createElement('div');
     d.textContent = msg;
@@ -546,708 +1337,239 @@
     setTimeout(() => d.remove(), 2900);
   }
 
-  // ---------------------------------------------------------------------------
-  // Rendering
-  // ---------------------------------------------------------------------------
-  const canvas = document.getElementById('game');
-  const mainCtx = canvas.getContext('2d');
-  let ctx = mainCtx;
-  // Floor crayons are drawn once into an offscreen layer and only redrawn when they change,
-  // so the room can hold thousands of them.
-  const layerCanvas = document.createElement('canvas');
-  const layerCtx = layerCanvas.getContext('2d');
-  let layerScale = 1;
-  let crayonsDirty = true;
-  function touch() { crayonsDirty = true; }
-  const settled = c => !(c.drop > 0) && c.fall === undefined;
-  function renderCrayonLayer() {
-    crayonsDirty = false;
-    ctx = layerCtx;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.clearRect(0, 0, layerCanvas.width, layerCanvas.height);
-    ctx.setTransform(layerScale, 0, 0, layerScale, 0, 0);
-    for (const c of state.crayons) if (settled(c)) drawCrayon(c.x, c.y, c.a, c.c);
-    ctx = mainCtx;
+  let floatAcc = 0, floatT = 0;
+  function earn(amount, show) {
+    state.coins += amount;
+    if (show) floatAcc += amount;
   }
-  let scale = 1, offX = 0, offY = 0, dpr = 1;
-
-  function resize() {
-    dpr = window.devicePixelRatio || 1;
-    const r = canvas.getBoundingClientRect();
-    canvas.width = Math.max(1, Math.round(r.width * dpr));
-    canvas.height = Math.max(1, Math.round(r.height * dpr));
-    scale = Math.min(r.width / W, r.height / H);
-    offX = (r.width - W * scale) / 2;
-    offY = (r.height - H * scale) / 2;
-    layerScale = Math.min(2, Math.max(0.5, scale * dpr));
-    layerCanvas.width = Math.round(W * layerScale);
-    layerCanvas.height = Math.round(H * layerScale);
-    touch();
-  }
-
-  function rr(x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-  }
-
-  function drawCrayon(x, y, a, ci, glow) {
-    const col = SHADES[ci].hex;
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(a);
-    if (glow) {
-      ctx.shadowColor = '#fff';
-      ctx.shadowBlur = 10;
-      ctx.fillStyle = '#fffbe0';
-      rr(-CL / 2 - 3, -CW / 2 - 3, CL + 6, CW + 6, 6);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    } else {
-      ctx.fillStyle = 'rgba(60,30,10,.18)';
-      rr(-CL / 2 + 2, -CW / 2 + 3, CL - 4, CW, 4);
-      ctx.fill();
+  function flushFloaters(dt) {
+    floatT -= dt;
+    if (floatAcc > 0 && floatT <= 0) {
+      const d = document.createElement('div');
+      d.textContent = '+' + (floatAcc < 10 ? floatAcc.toFixed(1).replace(/\.0$/, '') : fmt(floatAcc)) + ' 🪙';
+      $('floaters').appendChild(d);
+      setTimeout(() => d.remove(), 1100);
+      floatAcc = 0;
+      floatT = 0.12;
     }
-    // body
-    ctx.fillStyle = col;
-    rr(-CL / 2, -CW / 2, CL - 8, CW, 3);
-    ctx.fill();
-    // tip
-    ctx.beginPath();
-    ctx.moveTo(CL / 2 - 9, -CW / 2 + 1);
-    ctx.lineTo(CL / 2, -1);
-    ctx.lineTo(CL / 2, 1);
-    ctx.lineTo(CL / 2 - 9, CW / 2 - 1);
-    ctx.closePath();
-    ctx.fill();
-    // paper wrapper
-    ctx.fillStyle = shade(col, -35);
-    ctx.fillRect(-CL / 2 + 5, -CW / 2, 15, CW);
-    ctx.fillStyle = 'rgba(255,255,255,.55)';
-    ctx.fillRect(-CL / 2 + 7, -CW / 2, 1.5, CW);
-    ctx.fillRect(-CL / 2 + 17, -CW / 2, 1.5, CW);
-    // shine
-    ctx.fillStyle = 'rgba(255,255,255,.35)';
-    ctx.fillRect(-CL / 2 + 1, -CW / 2 + 1.5, CL - 11, 1.6);
-    // outline (helps the very light shades)
-    ctx.strokeStyle = 'rgba(0,0,0,.28)';
-    ctx.lineWidth = 0.8;
-    rr(-CL / 2, -CW / 2, CL - 8, CW, 3);
-    ctx.stroke();
-    ctx.restore();
-  }
-
-  function drawRoom() {
-    // wall
-    ctx.fillStyle = '#f7e6cf';
-    ctx.fillRect(0, 0, W, WALL);
-    ctx.fillStyle = 'rgba(232, 196, 160, .45)';
-    for (let x = 0; x < W; x += 40) ctx.fillRect(x, 0, 14, WALL);
-    // floor planks
-    ctx.fillStyle = '#d8b088';
-    ctx.fillRect(0, WALL, W, H - WALL);
-    ctx.strokeStyle = 'rgba(120, 75, 40, .22)';
-    ctx.lineWidth = 2;
-    for (let y = WALL + 34, row = 0; y < H; y += 34, row++) {
-      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-      for (let x = (row % 2) * 110; x < W; x += 220) {
-        ctx.beginPath(); ctx.moveTo(x, y - 34); ctx.lineTo(x, y); ctx.stroke();
-      }
-    }
-    // baseboard
-    ctx.fillStyle = '#fff7ea';
-    ctx.fillRect(0, WALL - 8, W, 14);
-    ctx.fillStyle = 'rgba(0,0,0,.08)';
-    ctx.fillRect(0, WALL + 6, W, 6);
-  }
-
-  function drawShelves() {
-    state.shelves.forEach(s => {
-      const x = shelfX(s.slot);
-      const y = 128;
-      // brackets
-      ctx.fillStyle = '#8a5a35';
-      ctx.fillRect(x - SHELF_W / 2 + 14, y, 8, 18);
-      ctx.fillRect(x + SHELF_W / 2 - 22, y, 8, 18);
-      // packed boxes
-      s.packed.forEach((c, i) => {
-        const bx = x - SHELF_W / 2 + 8 + i * 40;
-        ctx.fillStyle = '#c99a62';
-        ctx.fillRect(bx, y - 32, 34, 32);
-        ctx.fillStyle = '#b5844c';
-        ctx.fillRect(bx, y - 32, 34, 5);
-        ctx.fillStyle = SHADES[c].hex;
-        ctx.fillRect(bx + 6, y - 22, 22, 12);
-        ctx.strokeStyle = 'rgba(0,0,0,.25)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(bx + 6, y - 22, 22, 12);
-        ctx.fillStyle = 'rgba(255,255,255,.5)';
-        ctx.fillRect(bx + 15, y - 32, 4, 32);
-      });
-      // plank
-      ctx.fillStyle = '#a8703f';
-      rr(x - SHELF_W / 2, y, SHELF_W, 10, 3);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,.2)';
-      ctx.fillRect(x - SHELF_W / 2 + 3, y + 1, SHELF_W - 6, 2);
-    });
-  }
-
-  function drawBox(b, highlight) {
-    let x = b.x, y = b.y;
-    if (b.shake > 0) x += Math.sin(time * 60) * 4 * (b.shake / 0.35);
-    const bump = b.bump > 0 ? Math.sin((b.bump / 0.25) * Math.PI) * 4 : 0;
-    const cap = capacity();
-    const full = b.count >= cap;
-    const col = SHADES[b.color].hex;
-
-    ctx.save();
-    ctx.translate(x, y - bump);
-    if (highlight) {
-      ctx.shadowColor = '#fff59a';
-      ctx.shadowBlur = 24 + Math.sin(time * 6) * 8;
-      ctx.fillStyle = '#fff59a';
-      rr(-BW / 2 - 6, -BH / 2 - 16, BW + 12, BH + 22, 12);
-      ctx.fill();
-      ctx.shadowBlur = 0;
-    }
-    // shadow
-    ctx.fillStyle = 'rgba(60,30,10,.22)';
-    ctx.beginPath(); ctx.ellipse(0, BH / 2 + 2, BW / 2 + 4, 8, 0, 0, Math.PI * 2); ctx.fill();
-    // back of box (inside)
-    ctx.fillStyle = '#9c6f3e';
-    ctx.fillRect(-BW / 2 + 4, -BH / 2 - 8, BW - 8, 14);
-    // crayons poking out, more as it fills
-    const shown = Math.ceil((b.count / cap) * 12);
-    for (let i = 0; i < shown; i++) {
-      const cx = -BW / 2 + 10 + (i % 12) * ((BW - 20) / 11);
-      const h = 10 + ((i * 7) % 5) * 2;
-      ctx.fillStyle = col;
-      ctx.fillRect(cx - 3, -BH / 2 - 4 - h, 6, h + 6);
-      ctx.beginPath();
-      ctx.moveTo(cx - 3, -BH / 2 - 4 - h); ctx.lineTo(cx, -BH / 2 - 10 - h); ctx.lineTo(cx + 3, -BH / 2 - 4 - h); ctx.fill();
-      ctx.strokeStyle = 'rgba(0,0,0,.25)'; ctx.lineWidth = 0.7;
-      ctx.strokeRect(cx - 3, -BH / 2 - 4 - h, 6, h + 6);
-    }
-    // front of box
-    ctx.fillStyle = '#c99a62';
-    rr(-BW / 2, -BH / 2 + 2, BW, BH - 2, 6);
-    ctx.fill();
-    ctx.fillStyle = '#b5844c';
-    ctx.fillRect(-BW / 2, -BH / 2 + 2, BW, 6);
-    // label
-    ctx.fillStyle = col;
-    rr(-BW / 2 + 8, -BH / 2 + 12, BW - 16, 20, 5);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(0,0,0,.3)'; ctx.lineWidth = 1; ctx.stroke();
-    ctx.fillStyle = luminance(col) > 0.6 ? '#2a2a2a' : '#fff';
-    ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(SHADES[b.color].name, 0, -BH / 2 + 22.5, BW - 18);
-    // fill meter
-    ctx.fillStyle = 'rgba(0,0,0,.18)';
-    rr(-BW / 2 + 8, BH / 2 - 16, BW - 16, 9, 4); ctx.fill();
-    ctx.fillStyle = full ? '#3bb273' : '#fff';
-    rr(-BW / 2 + 8, BH / 2 - 16, (BW - 16) * Math.min(1, b.count / cap), 9, 4); ctx.fill();
-    ctx.fillStyle = '#4a2f18';
-    ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
-    ctx.fillText(`${b.count}/${cap}`, 0, BH / 2 - 25);
-    ctx.restore();
-
-    if (full && !state.upgrades.autoPack) {
-      const py = y - BH / 2 - 34 + Math.sin(time * 5) * 3;
-      ctx.fillStyle = '#3bb273';
-      rr(x - 30, py - 12, 60, 22, 11); ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('PACK!', x, py);
-    }
-  }
-
-  function luminance(hex) {
-    const n = parseInt(hex.slice(1), 16);
-    return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255;
-  }
-
-  function drawDecor(d) {
-    const def = DECOR[d.type];
-    const { x, y } = d;
-    ctx.save();
-    ctx.translate(x, y);
-    switch (d.type) {
-      case 'rug': {
-        ctx.fillStyle = '#c4566b';
-        ctx.beginPath(); ctx.ellipse(0, 0, def.w / 2, def.h / 2, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#e88a8a';
-        ctx.beginPath(); ctx.ellipse(0, 0, def.w / 2 - 14, def.h / 2 - 12, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#f6d38b';
-        ctx.beginPath(); ctx.ellipse(0, 0, def.w / 2 - 34, def.h / 2 - 28, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#7fbf9b';
-        ctx.beginPath(); ctx.ellipse(0, 0, def.w / 2 - 60, def.h / 2 - 44, 0, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'plant': {
-        ctx.fillStyle = 'rgba(0,0,0,.2)';
-        ctx.beginPath(); ctx.ellipse(0, 34, 24, 6, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#3d9a52';
-        [[-12, -14, 16], [12, -14, 16], [0, -26, 17], [-4, -6, 14], [8, -2, 12]].forEach(([lx, ly, r]) => {
-          ctx.beginPath(); ctx.arc(lx, ly, r, 0, Math.PI * 2); ctx.fill();
-        });
-        ctx.fillStyle = '#5cbf6c';
-        ctx.beginPath(); ctx.arc(-6, -22, 8, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#d16d3c';
-        ctx.beginPath(); ctx.moveTo(-20, 4); ctx.lineTo(20, 4); ctx.lineTo(15, 36); ctx.lineTo(-15, 36); ctx.fill();
-        ctx.fillStyle = '#b4582c'; ctx.fillRect(-21, 4, 42, 7);
-        break;
-      }
-      case 'lamp': {
-        ctx.fillStyle = 'rgba(0,0,0,.2)';
-        ctx.beginPath(); ctx.ellipse(0, 52, 20, 5, 0, 0, Math.PI * 2); ctx.fill();
-        const g = ctx.createRadialGradient(0, -30, 4, 0, -30, 90);
-        g.addColorStop(0, 'rgba(255,240,170,.45)'); g.addColorStop(1, 'rgba(255,240,170,0)');
-        ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, -30, 90, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#5b4636'; ctx.fillRect(-2, -30, 4, 80);
-        ctx.fillRect(-14, 48, 28, 5);
-        ctx.fillStyle = '#ffd98a';
-        ctx.beginPath(); ctx.moveTo(-12, -54); ctx.lineTo(12, -54); ctx.lineTo(20, -26); ctx.lineTo(-20, -26); ctx.fill();
-        break;
-      }
-      case 'beanbag': {
-        ctx.fillStyle = 'rgba(0,0,0,.2)';
-        ctx.beginPath(); ctx.ellipse(0, 28, 44, 9, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#6a8fd6';
-        ctx.beginPath(); ctx.ellipse(0, 6, 44, 28, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#86a8ea';
-        ctx.beginPath(); ctx.ellipse(-6, -8, 30, 20, -0.2, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = 'rgba(255,255,255,.25)';
-        ctx.beginPath(); ctx.ellipse(-14, -16, 10, 5, -0.4, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'fishbowl': {
-        ctx.fillStyle = '#7a5235'; ctx.fillRect(-26, 22, 52, 12);
-        ctx.fillStyle = 'rgba(150, 210, 255, .55)';
-        ctx.beginPath(); ctx.arc(0, -2, 28, 0, Math.PI * 2); ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,.8)'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.arc(0, -2, 28, 0, Math.PI * 2); ctx.stroke();
-        const fx = Math.sin(time * 1.3) * 12, dir = Math.cos(time * 1.3) >= 0 ? 1 : -1;
-        ctx.fillStyle = '#ff8a12';
-        ctx.beginPath(); ctx.ellipse(fx, 2, 8, 5, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(fx - dir * 7, 2); ctx.lineTo(fx - dir * 14, -3); ctx.lineTo(fx - dir * 14, 7); ctx.fill();
-        ctx.fillStyle = '#3d9a52'; ctx.fillRect(-14, 10, 3, 14); ctx.fillRect(10, 6, 3, 18);
-        break;
-      }
-      case 'catbed': {
-        ctx.fillStyle = 'rgba(0,0,0,.2)';
-        ctx.beginPath(); ctx.ellipse(0, 22, 52, 10, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#b36a8f';
-        ctx.beginPath(); ctx.ellipse(0, 6, 52, 26, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#f2c4d8';
-        ctx.beginPath(); ctx.ellipse(0, 4, 40, 18, 0, 0, Math.PI * 2); ctx.fill();
-        // sleeping cat
-        const breathe = Math.sin(time * 2) * 1.5;
-        ctx.fillStyle = '#f0a046';
-        ctx.beginPath(); ctx.ellipse(4, 0, 26, 13 + breathe * 0.4, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(-18, -4, 11, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-26, -10); ctx.lineTo(-24, -20); ctx.lineTo(-18, -13); ctx.fill();
-        ctx.beginPath(); ctx.moveTo(-15, -14); ctx.lineTo(-10, -20); ctx.lineTo(-9, -10); ctx.fill();
-        ctx.strokeStyle = '#d07e2a'; ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.arc(22, 4, 12, -0.5, 2.2); ctx.stroke();
-        ctx.strokeStyle = '#5a3d22'; ctx.lineWidth = 1.2;
-        ctx.beginPath(); ctx.arc(-22, -4, 2.5, 0.2, Math.PI - 0.2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(-14, -4, 2.5, 0.2, Math.PI - 0.2); ctx.stroke();
-        ctx.fillStyle = 'rgba(90,61,34,' + (0.5 + Math.sin(time * 2) * 0.4) + ')';
-        ctx.font = 'bold 12px sans-serif';
-        ctx.fillText('z', -6 + Math.sin(time) * 2, -26 - (time * 6) % 8);
-        break;
-      }
-      case 'poster': {
-        ctx.fillStyle = '#fff';
-        ctx.fillRect(-def.w / 2, -def.h / 2, def.w, def.h);
-        ctx.strokeStyle = 'rgba(0,0,0,.15)'; ctx.strokeRect(-def.w / 2, -def.h / 2, def.w, def.h);
-        ['#ff6b6b', '#ff8a12', '#ffcc00', '#2fb344', '#1d6fd8', '#8e44ad'].forEach((c, i) => {
-          ctx.strokeStyle = c; ctx.lineWidth = 5;
-          ctx.beginPath(); ctx.arc(0, 18, 34 - i * 5, Math.PI, 0); ctx.stroke();
-        });
-        ctx.fillStyle = '#e35d6a'; ctx.beginPath(); ctx.arc(-def.w / 2 + 6, -def.h / 2 + 6, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.beginPath(); ctx.arc(def.w / 2 - 6, -def.h / 2 + 6, 3, 0, Math.PI * 2); ctx.fill();
-        break;
-      }
-      case 'clock': {
-        ctx.fillStyle = '#8a5a35'; ctx.beginPath(); ctx.arc(0, 0, 29, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#fffaf0'; ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI * 2); ctx.fill();
-        const now = new Date();
-        const hA = ((now.getHours() % 12) + now.getMinutes() / 60) / 12 * Math.PI * 2;
-        const mA = (now.getMinutes() + now.getSeconds() / 60) / 60 * Math.PI * 2;
-        ctx.strokeStyle = '#3a2e2a'; ctx.lineCap = 'round';
-        ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.sin(hA) * 12, -Math.cos(hA) * 12); ctx.stroke();
-        ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.sin(mA) * 18, -Math.cos(mA) * 18); ctx.stroke();
-        ctx.lineCap = 'butt';
-        break;
-      }
-      case 'window': {
-        const w = def.w, h = def.h;
-        ctx.fillStyle = '#fffaf0'; ctx.fillRect(-w / 2 - 6, -h / 2 - 6, w + 12, h + 12);
-        const g = ctx.createLinearGradient(0, -h / 2, 0, h / 2);
-        g.addColorStop(0, '#8ecdf7'); g.addColorStop(1, '#d6f0ff');
-        ctx.fillStyle = g; ctx.fillRect(-w / 2, -h / 2, w, h);
-        ctx.fillStyle = '#fff';
-        const cx = ((time * 8) % (w + 60)) - w / 2 - 30;
-        ctx.save(); ctx.beginPath(); ctx.rect(-w / 2, -h / 2, w, h); ctx.clip();
-        [[0, 0, 12], [12, -4, 14], [24, 0, 11]].forEach(([ox, oy, r]) => { ctx.beginPath(); ctx.arc(cx + ox, -18 + oy, r, 0, Math.PI * 2); ctx.fill(); });
-        ctx.fillStyle = '#6fbf6a'; ctx.beginPath(); ctx.ellipse(0, h / 2 + 10, w * 0.8, 30, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.restore();
-        ctx.fillStyle = '#fffaf0'; ctx.fillRect(-3, -h / 2, 6, h); ctx.fillRect(-w / 2, -3, w, 6);
-        ctx.fillStyle = '#f4b6c2'; ctx.fillRect(-w / 2 - 14, -h / 2 - 10, 16, h + 16); ctx.fillRect(w / 2 - 2, -h / 2 - 10, 16, h + 16);
-        break;
-      }
-      case 'lights': {
-        ctx.strokeStyle = '#4a5a3a'; ctx.lineWidth = 1.5;
-        ctx.beginPath(); ctx.moveTo(-def.w / 2, -10);
-        ctx.quadraticCurveTo(-def.w / 4, 16, 0, -10); ctx.quadraticCurveTo(def.w / 4, 16, def.w / 2, -10); ctx.stroke();
-        const cols = ['#ff6b6b', '#ffcc00', '#2fb344', '#8ecdf7', '#ff6fae', '#cdb0f7'];
-        for (let i = 0; i <= 12; i++) {
-          const t = i / 12;
-          const half = t < 0.5 ? t * 2 : (t - 0.5) * 2;
-          const px = -def.w / 2 + t * def.w;
-          const py = -10 + 4 * half * (1 - half) * 13;
-          const on = 0.55 + 0.45 * Math.sin(time * 3 + i * 1.7);
-          ctx.globalAlpha = on;
-          ctx.fillStyle = cols[i % cols.length];
-          ctx.shadowColor = cols[i % cols.length]; ctx.shadowBlur = 10;
-          ctx.beginPath(); ctx.ellipse(px, py + 6, 4, 6, 0, 0, Math.PI * 2); ctx.fill();
-        }
-        ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-        break;
-      }
-    }
-    ctx.restore();
-  }
-
-  function drawBot(b) {
-    const y = b.y + Math.sin(b.bob) * 1.5;
-    ctx.save();
-    ctx.translate(b.x, y);
-    ctx.fillStyle = 'rgba(0,0,0,.2)';
-    ctx.beginPath(); ctx.ellipse(0, 16, 20, 6, 0, 0, Math.PI * 2); ctx.fill();
-    ctx.fillStyle = '#e9edf2';
-    ctx.beginPath(); ctx.arc(0, 0, 18, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#9aa6b2'; ctx.lineWidth = 2; ctx.stroke();
-    ctx.fillStyle = '#2d3a4a';
-    rr(-11, -9, 22, 11, 5); ctx.fill();
-    ctx.fillStyle = '#7ff0c0';
-    ctx.beginPath(); ctx.arc(-4 + b.face * 2, -4, 2.5, 0, Math.PI * 2); ctx.arc(4 + b.face * 2, -4, 2.5, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#9aa6b2';
-    ctx.beginPath(); ctx.moveTo(0, -18); ctx.lineTo(0, -26); ctx.stroke();
-    ctx.fillStyle = '#ff6b6b'; ctx.beginPath(); ctx.arc(0, -27, 3, 0, Math.PI * 2); ctx.fill();
-    ctx.restore();
-    b.carry.forEach((c, i) => drawCrayon(b.x + b.face * 8 + i * 3, y + 6 - i * 3, 0.3 * b.face, c.c));
-  }
-
-  function draw() {
-    const cw = canvas.width, ch = canvas.height;
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#2b2233';
-    ctx.fillRect(0, 0, cw, ch);
-    ctx.setTransform(dpr * scale, 0, 0, dpr * scale, dpr * offX, dpr * offY);
-    ctx.save();
-    ctx.beginPath(); ctx.rect(0, 0, W, H); ctx.clip();
-
-    drawRoom();
-    state.decor.filter(d => DECOR[d.type].wall).forEach(drawDecor);
-    drawShelves();
-    state.decor.filter(d => DECOR[d.type].under).forEach(drawDecor);
-
-    // What shade should glow?
-    let glowShade = null;
-    if (hand.length && state.upgrades.glow >= 1) glowShade = hand[0].c;
-    else if (!hand.length && state.upgrades.glow >= 2 && hovered) glowShade = hovered.c;
-
-    // crayons: cached layer, then anything still falling, then highlighted shade on top
-    if (crayonsDirty) renderCrayonLayer();
-    ctx.drawImage(layerCanvas, 0, 0, W, H);
-    for (const c of state.crayons) {
-      if (settled(c) || c.drop > 0) continue;
-      drawCrayon(c.x, c.y - (1 - c.fall) * (1 - c.fall) * 160, c.a, c.c);
-    }
-    if (glowShade !== null) {
-      for (const c of state.crayons) if (c.c === glowShade && settled(c)) drawCrayon(c.x, c.y, c.a, c.c, true);
-    }
-
-    // Floor decor and boxes, sorted by y so things overlap naturally
-    const things = [];
-    state.decor.forEach(d => { const def = DECOR[d.type]; if (!def.wall && !def.under) things.push({ y: d.y + def.h / 2, f: () => drawDecor(d) }); });
-    state.boxes.forEach(b => things.push({ y: b.y + BH / 2, f: () => drawBox(b, glowShade !== null && b.color === glowShade) }));
-    things.sort((a, b) => a.y - b.y);
-    things.forEach(t => t.f());
-
-    bots.forEach(drawBot);
-
-    // edit selection
-    if (editMode && selected) {
-      const o = selected.obj;
-      const w = selected.kind === 'box' ? BW : DECOR[o.type].w;
-      const h = selected.kind === 'box' ? BH : DECOR[o.type].h;
-      ctx.setLineDash([6, 5]);
-      ctx.strokeStyle = '#ff7a59'; ctx.lineWidth = 3;
-      ctx.strokeRect(o.x - w / 2 - 6, o.y - h / 2 - 6, w + 12, h + 12);
-      ctx.setLineDash([]);
-    }
-
-    // held crayons follow the cursor in a little fan
-    if (hand.length) {
-      hand.forEach((c, i) => {
-        const off = i - (hand.length - 1) / 2;
-        drawCrayon(mouse.x + off * 4, mouse.y + 6 + Math.abs(off) * 1.2, -1.2 + off * 0.08, c.c);
-      });
-      ctx.fillStyle = 'rgba(40,30,30,.85)';
-      rr(mouse.x + 14, mouse.y - 34, 26, 18, 9); ctx.fill();
-      ctx.fillStyle = '#fff'; ctx.font = 'bold 12px "Trebuchet MS", sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText(hand.length, mouse.x + 27, mouse.y - 25);
-    }
-
-    // sparks & floating text
-    sparks.forEach(s => {
-      ctx.globalAlpha = Math.max(0, 1 - s.t / 0.7);
-      ctx.fillStyle = s.col;
-      ctx.beginPath(); ctx.arc(s.x, s.y, 3.5, 0, Math.PI * 2); ctx.fill();
-    });
-    ctx.globalAlpha = 1;
-    ctx.font = 'bold 18px "Trebuchet MS", sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    floaters.forEach(f => {
-      ctx.globalAlpha = Math.max(0, 1 - f.t / 1.2);
-      ctx.strokeStyle = 'rgba(80,50,20,.8)'; ctx.lineWidth = 4;
-      ctx.strokeText('🪙' + f.text, f.x, f.y - f.t * 40);
-      ctx.fillStyle = '#ffe066';
-      ctx.fillText('🪙' + f.text, f.x, f.y - f.t * 40);
-    });
-    ctx.globalAlpha = 1;
-
-    ctx.restore();
   }
 
   // ---------------------------------------------------------------------------
-  // Update loop
+  // Highlighting (Shade Spotter upgrade)
   // ---------------------------------------------------------------------------
-  let last = performance.now();
-  let saveT = 0;
-  let hudT = 0;
-
-  function update(dt) {
-    time += dt;
-    // falling crayons from a new delivery
-    for (const c of state.crayons) {
-      if (c.drop > 0) { c.drop -= dt; continue; }
-      if (c.fall !== undefined) { c.fall += dt * 2.2; if (c.fall >= 1) { delete c.fall; touch(); } }
+  let lastGlow = -1;
+  const _gc = new T.Color();
+  const GLOW_TO = new T.Color(1, 1, 0.75);
+  function updateGlow(time) {
+    let glow = -1;
+    if (hand.n && state.upgrades.glow >= 1) glow = hand.c;
+    else if (!hand.n && state.upgrades.glow >= 2 && aim.type === 'crayon') glow = aim.obj.c;
+    if (glow !== lastGlow && lastGlow >= 0) {
+      for (const o of cr) if (o.c === lastGlow) writeColor(o);
     }
-    state.boxes.forEach(b => {
-      if (b.shake > 0) b.shake -= dt;
-      if (b.bump > 0) b.bump -= dt;
-    });
-    floaters.forEach(f => { f.t += dt; });
-    floaters = floaters.filter(f => f.t < 1.2);
-    sparks.forEach(s => { s.t += dt; s.x += s.vx * dt; s.y += s.vy * dt; s.vy += 300 * dt; });
-    sparks = sparks.filter(s => s.t < 0.7);
-
-    syncBots();
-    bots.forEach(b => updateBot(b, dt));
-
-    // passive shelf income
-    state.coins += shelfIncome() * dt;
-
-    // deliveries
-    state.deliveryT -= dt;
-    if (state.deliveryT <= 0) {
-      state.deliveryT = deliveryInterval(state.upgrades.delivery);
-      if (state.crayons.length < maxFloor() - 20) deliverPile();
+    lastGlow = glow;
+    const pulse = 0.35 + 0.25 * Math.sin(time * 6);
+    if (glow >= 0) {
+      _gc.copy(SHADE_COLORS[glow]).lerp(GLOW_TO, pulse);
+      for (const o of cr) if (o.c === glow) writeColor(o, _gc);
     }
-
-    saveT += dt;
-    if (saveT > 5) { saveT = 0; save(); }
-    hudT += dt;
-    if (hudT > 0.2) { hudT = 0; updateHud(); }
-  }
-
-  function frame(now) {
-    const dt = Math.min(0.1, (now - last) / 1000);
-    last = now;
-    update(dt);
-    draw();
-    requestAnimationFrame(frame);
+    for (const b of state.boxes) {
+      const on = glow >= 0 && b.color === glow;
+      b.mat.emissive.setRGB(on ? 0.5 * pulse + 0.15 : 0, on ? 0.45 * pulse + 0.12 : 0, 0);
+    }
   }
 
   // ---------------------------------------------------------------------------
   // HUD
   // ---------------------------------------------------------------------------
-  const $ = id => document.getElementById(id);
+  const aimLabel = $('aimLabel'), handLabel = $('handLabel'), hint = $('hint'), crosshair = $('crosshair');
+  const sw = hex => `<span class="sw" style="background:${hex}"></span>`;
+  let lastAimHTML = '', lastHandHTML = '';
+
+  function updateAimLabel() {
+    let html = '';
+    if (placing) {
+      const o = placing.obj;
+      const name = placing.kind === 'box' ? `${SHADES[o.color].name} box` : DECOR[o.type].name;
+      const canRotate = placing.kind === 'box' || !DECOR[o.type].wall;
+      html = `Placing <b>${name}</b> <span class="dim">· click to place${canRotate ? ' · R rotate' : ''}${placing.kind === 'decor' ? ' · X put away' : ''}${placing.isNew ? '' : ' · Esc cancel'}</span>`;
+    } else if (aim.type === 'crayon') {
+      const s = SHADES[aim.obj.c];
+      html = `${sw(s.hex)}<b>${s.name}</b> <span class="dim">· click to ${hand.n ? 'grab more' : 'pick up'}</span>`;
+    } else if (aim.type === 'box') {
+      const b = aim.obj, s = SHADES[b.color];
+      const full = b.count >= capacity();
+      const what = hand.n ? 'click to toss' : full && !state.upgrades.autoPack ? 'click to pack' : 'G move' + (b.count === 0 ? ' · C change shade' : '');
+      html = `${sw(s.hex)}<b>${s.name}</b> box ${b.count}/${capacity()} <span class="dim">· ${what}</span>`;
+    } else if (aim.type === 'decor') {
+      html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
+    } else if (aim.type === 'floor') {
+      if (hand.n && aim.t < 9) html = '<span class="dim">click to drop here</span>';
+      else if (aim.rug && aim.t < 8) html = '<b>Cozy Rug</b> <span class="dim">· G move</span>';
+    }
+    if (html !== lastAimHTML) { aimLabel.innerHTML = html; lastAimHTML = html; }
+    aimLabel.hidden = !html;
+    if (!locked) {
+      aimLabel.classList.add('free');
+      aimLabel.style.left = (mouseNDC.x + 1) / 2 * window.innerWidth + 'px';
+      aimLabel.style.top = (1 - mouseNDC.y) / 2 * window.innerHeight + 26 + 'px';
+    } else {
+      aimLabel.classList.remove('free');
+      aimLabel.style.left = ''; aimLabel.style.top = '';
+    }
+    crosshair.classList.toggle('free', !locked);
+    crosshair.classList.toggle('on', aim.type === 'crayon' || aim.type === 'box');
+    let hh = '';
+    if (hand.n) {
+      const s = SHADES[hand.c];
+      hh = `${sw(s.hex)}Holding <b>${hand.n} ${s.name}</b> <span class="dim">· Q drop</span>`;
+    }
+    if (hh !== lastHandHTML) { handLabel.innerHTML = hh; lastHandHTML = hh; }
+    handLabel.hidden = !hh;
+    hint.textContent = locked ? 'WASD walk · Shift run · E shop · G move furniture · Esc free the mouse'
+      : 'WASD walk · drag to look · click to act · E shop · L lock mouse';
+  }
+
   function updateHud() {
     $('coins').textContent = '🪙 ' + fmt(state.coins);
     $('shopCoins').textContent = '🪙 ' + fmt(state.coins);
     const inc = shelfIncome();
     $('income').textContent = `Shelves +${inc < 10 ? inc.toFixed(1) : fmt(inc)}/s`;
     $('cozy').textContent = `Cozy +${cozyPct()}%`;
-    $('floorCount').textContent = `${state.crayons.length} crayons to sort`;
-    $('delivery').textContent = state.crayons.length >= maxFloor() - 20 ? 'Floor is full!' : `Next pile in ${Math.ceil(state.deliveryT)}s`;
-    $('btnDeliver').disabled = state.crayons.length > 300;
+    $('floorCount').textContent = `${cr.length.toLocaleString()} crayons to sort`;
+    $('delivery').textContent = cr.length >= maxFloor() - 50 ? 'Room is full!' : `Next pile in ${Math.max(0, Math.ceil(state.deliveryT))}s`;
+    $('btnDeliver').disabled = cr.length > 400;
+    $('btnLock').classList.toggle('active', locked);
     if (!$('shop').hidden) refreshShopButtons();
   }
 
   // ---------------------------------------------------------------------------
   // Input
   // ---------------------------------------------------------------------------
-  let hovered = null;
-  const tooltip = $('tooltip');
+  const anyModal = () => !$('shop').hidden || !$('picker').hidden || !$('help').hidden;
+  const isTouch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
 
-  function toWorld(e) {
-    const r = canvas.getBoundingClientRect();
-    return { x: (e.clientX - r.left - offX) / scale, y: (e.clientY - r.top - offY) / scale, sx: e.clientX - r.left, sy: e.clientY - r.top };
+  function requestLock() {
+    const fail = () => toast('Mouse lock is not available here. Drag to look around instead.');
+    try {
+      const p = canvas.requestPointerLock && canvas.requestPointerLock();
+      if (p && p.catch) p.catch(fail);
+    } catch (e) { fail(); }
   }
+  document.addEventListener('pointerlockchange', () => { locked = document.pointerLockElement === canvas; keys.clear(); });
 
-  function editItemAt(x, y) {
-    // boxes first (they sit on top), then floor decor, then wall decor, then rugs
-    const b = boxAt(x, y);
-    if (b) return { kind: 'box', obj: b };
-    const order = [...state.decor].sort((a, b) => layer(b) - layer(a));
-    for (const d of order) {
-      const def = DECOR[d.type];
-      if (Math.abs(x - d.x) <= def.w / 2 && Math.abs(y - d.y) <= def.h / 2) return { kind: 'decor', obj: d };
+  function act() {
+    updateAim();
+    if (placing) { finishPlacing(); return; }
+    if (hand.n) {
+      if (aim.type === 'crayon' && aim.obj.c === hand.c) pickUp(aim.obj);
+      else if (aim.type === 'box') tossToBox(aim.obj);
+      else if (aim.type === 'floor' && aim.t < 9) dropAt(aim.point);
+      else if (aim.type === 'decor') toast('Toss crayons into a box, or click the floor to drop them.');
+      return;
     }
-    return null;
+    if (aim.type === 'crayon') pickUp(aim.obj);
+    else if (aim.type === 'box' && aim.obj.count >= capacity() && !state.upgrades.autoPack) packBox(aim.obj);
   }
-  const layer = d => DECOR[d.type].under ? 0 : DECOR[d.type].wall ? 1 : 2;
 
+  function setMouse(e) {
+    mouseNDC.set(e.clientX / window.innerWidth * 2 - 1, -(e.clientY / window.innerHeight) * 2 + 1);
+  }
+
+  let drag = null;
   canvas.addEventListener('pointerdown', e => {
-    canvas.setPointerCapture(e.pointerId);
-    const p = toWorld(e);
-    mouse.x = p.x; mouse.y = p.y;
-    if (editMode) {
-      const it = editItemAt(p.x, p.y);
-      selectItem(it);
-      if (it) dragOff = { dx: it.obj.x - p.x, dy: it.obj.y - p.y };
+    if (anyModal()) return;
+    if (actx && actx.state === 'suspended') actx.resume();
+    if (locked) {
+      if (e.button === 0) act();
+      else if (e.button === 2 && placing) cancelPlacing();
       return;
     }
-    if (hand.length) {
-      pressed = { x: p.x, y: p.y, mode: 'drop' };
-      return;
-    }
-    const box = boxAt(p.x, p.y);
-    if (box && box.count >= capacity() && !state.upgrades.autoPack) { packBox(box); return; }
-    const c = crayonAt(p.x, p.y);
-    if (c) {
-      pickUp(c);
-      pressed = { x: p.x, y: p.y, mode: 'grab' };
-    }
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, lx: e.clientX, ly: e.clientY, moved: false, button: e.button };
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    setMouse(e);
   });
-
   canvas.addEventListener('pointermove', e => {
-    const p = toWorld(e);
-    mouse.x = p.x; mouse.y = p.y;
-    if (editMode && selected && dragOff) {
-      moveItem(selected, p.x + dragOff.dx, p.y + dragOff.dy);
+    if (locked) {
+      player.yaw -= e.movementX * 0.0022;
+      player.pitch = clamp(player.pitch - e.movementY * 0.0022, -1.45, 1.45);
       return;
     }
-    // hover tooltip
-    hovered = (!hand.length && !editMode) ? crayonAt(p.x, p.y) : null;
-    if (hovered) {
-      const s = SHADES[hovered.c];
-      tooltip.innerHTML = `<span class="sw" style="background:${s.hex}"></span>${s.name}`;
-      tooltip.style.left = p.sx + 'px';
-      tooltip.style.top = p.sy + 'px';
-      tooltip.hidden = false;
-    } else tooltip.hidden = true;
-    const box = boxAt(p.x, p.y);
-    canvas.style.cursor = editMode ? (editItemAt(p.x, p.y) ? 'move' : 'default')
-      : hand.length ? 'grabbing' : (hovered || (box && box.count >= capacity())) ? 'pointer' : 'default';
+    setMouse(e);
+    if (drag && drag.id === e.pointerId) {
+      if (!drag.moved && Math.hypot(e.clientX - drag.x, e.clientY - drag.y) > 6) drag.moved = true;
+      if (drag.moved) {
+        const k = e.pointerType === 'touch' ? 0.006 : 0.0045;
+        player.yaw -= (e.clientX - drag.lx) * k;
+        player.pitch = clamp(player.pitch - (e.clientY - drag.ly) * k, -1.45, 1.45);
+      }
+      drag.lx = e.clientX; drag.ly = e.clientY;
+    }
   });
-
-  canvas.addEventListener('pointerleave', () => { tooltip.hidden = true; hovered = null; });
-
   canvas.addEventListener('pointerup', e => {
-    const p = toWorld(e);
-    if (editMode) {
-      if (selected && dragOff) finishMove(selected);
-      dragOff = null;
-      return;
+    if (locked || !drag || drag.id !== e.pointerId) return;
+    if (!drag.moved) {
+      setMouse(e);
+      if (drag.button === 2) { if (placing) cancelPlacing(); }
+      else act();
     }
-    if (!pressed || !hand.length) { pressed = null; return; }
-    const moved = Math.hypot(p.x - pressed.x, p.y - pressed.y) > 12;
-    if (pressed.mode === 'grab' && !moved) { pressed = null; return; } // click to pick up, keep holding
-    // Either a drag ended or a second click happened: deposit or drop
-    if (!tryDeposit(p.x, p.y)) dropHandOnFloor(p.x, p.y);
-    pressed = null;
+    drag = null;
   });
+  canvas.addEventListener('pointercancel', () => { drag = null; });
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
 
   window.addEventListener('keydown', e => {
-    if (e.key === 'Escape') {
-      if (hand.length) dropHandOnFloor(mouse.x, mouse.y);
-      document.querySelectorAll('.modal').forEach(m => { m.hidden = true; });
+    if (e.code === 'Escape') {
+      if (anyModal()) { closeModals(); return; }
+      if (placing) cancelPlacing();
+      return;
+    }
+    if (anyModal()) return;
+    keys.add(e.code);
+    if (e.code === 'KeyE' || e.code === 'Tab') { e.preventDefault(); openShop(); }
+    else if (e.code === 'KeyL') { if (!locked) requestLock(); }
+    else if (e.code === 'KeyQ' && hand.n) dropAt(new T.Vector3(player.x - Math.sin(player.yaw) * 0.8, 0, player.z - Math.cos(player.yaw) * 0.8));
+    else if (e.code === 'KeyR' && placing) {
+      const o = placing.obj;
+      if (placing.kind === 'box') { o.rot = ((o.rot || 0) + 1) % 4; refreshBox(o); }
+      else if (!DECOR[o.type].wall) { o.ry = (o.ry || 0) + Math.PI / 4; refreshDecor(o); }
+    } else if (e.code === 'KeyX' && placing) putAway();
+    else if (e.code === 'KeyG' && !placing) {
+      updateAim();
+      if (aim.type === 'box') startPlacing('box', aim.obj, false);
+      else if (aim.type === 'decor') startPlacing('decor', aim.obj, false);
+      else if (aim.rug) startPlacing('decor', aim.rug, false);
+      else toast('Look at a box or decoration, then press G to move it.');
+    } else if (e.code === 'KeyC' && !placing) {
+      updateAim();
+      if (aim.type === 'box') {
+        if (aim.obj.count === 0) openPicker(aim.obj);
+        else toast('Only empty boxes can change shade. Fill it up and pack it first.');
+      }
     }
   });
+  window.addEventListener('keyup', e => keys.delete(e.code));
+  window.addEventListener('blur', () => keys.clear());
 
-  // ---------------------------------------------------------------------------
-  // Move mode
-  // ---------------------------------------------------------------------------
-  function setEditMode(on) {
-    editMode = on;
-    if (on && hand.length) dropHandOnFloor(mouse.x, mouse.y);
-    $('btnEdit').classList.toggle('active', on);
-    $('btnEdit').textContent = on ? '✋ Moving…' : '✋ Move';
-    if (!on) selectItem(null);
-    $('editPanel').hidden = !on;
-    if (on) selectItem(selected);
+  // Touch joystick for walking on phones and tablets
+  const joyEl = $('joystick');
+  if (isTouch) joyEl.hidden = false;
+  let joyId = null;
+  const knob = joyEl.querySelector('.knob');
+  function joyMove(e) {
+    const r = joyEl.getBoundingClientRect();
+    let x = (e.clientX - r.left - r.width / 2) / (r.width / 2);
+    let y = (e.clientY - r.top - r.height / 2) / (r.height / 2);
+    const l = Math.hypot(x, y);
+    if (l > 1) { x /= l; y /= l; }
+    joy.x = x; joy.y = y;
+    knob.style.transform = `translate(${x * 35}px, ${y * 35}px)`;
   }
-
-  function selectItem(it) {
-    selected = it;
-    const name = !it ? 'Drag a box or decoration to move it'
-      : it.kind === 'box' ? `${SHADES[it.obj.color].name} box` : DECOR[it.obj.type].name;
-    $('editName').textContent = name;
-    $('btnRecolor').hidden = !(it && it.kind === 'box');
-    $('btnRecolor').disabled = !(it && it.kind === 'box' && it.obj.count === 0);
-    $('btnRecolor').title = it && it.kind === 'box' && it.obj.count > 0 ? 'Empty or pack the box first' : '';
-    $('btnPutAway').hidden = !(it && it.kind === 'decor');
-  }
-
-  function moveItem(it, x, y) {
-    const o = it.obj;
-    if (it.kind === 'box') {
-      o.x = clamp(x, BW / 2 + 6, W - BW / 2 - 6);
-      o.y = clamp(y, WALL + BH / 2 + 20, H - BH / 2 - 6);
-    } else {
-      const def = DECOR[o.type];
-      o.x = clamp(x, def.w / 2 + 4, W - def.w / 2 - 4);
-      o.y = def.wall ? clamp(y, def.h / 2 + 4, WALL - def.h / 2 - 6) : clamp(y, WALL + def.h / 2 + 4, H - def.h / 2 - 4);
-    }
-  }
-
-  function finishMove(it) {
-    const o = it.obj;
-    if (it.kind === 'box') pushCrayonsOutOf(o.x, o.y, BW, BH);
-    else if (!DECOR[o.type].wall && !DECOR[o.type].under) pushCrayonsOutOf(o.x, o.y, DECOR[o.type].w, DECOR[o.type].h);
-    save();
-  }
-
-  $('btnEdit').onclick = () => setEditMode(!editMode);
-  $('btnDoneEdit').onclick = () => setEditMode(false);
-  $('btnRecolor').onclick = () => {
-    if (selected && selected.kind === 'box') openPicker(selected.obj);
-  };
-  $('btnPutAway').onclick = () => {
-    if (!selected || selected.kind !== 'decor') return;
-    const d = selected.obj;
-    state.decor = state.decor.filter(x => x !== d);
-    state.coins += Math.floor(DECOR[d.type].price / 2);
-    toast(`Put away the ${DECOR[d.type].name}.`);
-    selectItem(null);
-    save();
-  };
+  joyEl.addEventListener('pointerdown', e => { joyId = e.pointerId; joyEl.setPointerCapture(e.pointerId); joyMove(e); });
+  joyEl.addEventListener('pointermove', e => { if (e.pointerId === joyId) joyMove(e); });
+  const joyEnd = e => { if (e.pointerId === joyId) { joyId = null; joy.x = joy.y = 0; knob.style.transform = ''; } };
+  joyEl.addEventListener('pointerup', joyEnd);
+  joyEl.addEventListener('pointercancel', joyEnd);
 
   // ---------------------------------------------------------------------------
   // Shop
@@ -1255,24 +1577,35 @@
   let shopTab = 'storage';
   let shopButtons = [];
 
+  function closeModals() { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); }
+  function openShop() {
+    if (locked) document.exitPointerLock();
+    keys.clear();
+    $('shop').hidden = false;
+    renderShop();
+    updateHud();
+  }
+
   function shopItems() {
     const items = [];
     if (shopTab === 'storage') {
+      const covered = new Set(state.boxes.map(b => b.color)).size;
       items.push({
-        icon: '📦', name: 'Sorting Box', price: boxCost(),
-        desc: `Holds ${capacity()} crayons of one shade. Pick which shade after you buy it.`,
-        buy: () => openPicker(null),
+        icon: '📦', name: 'Sorting Box', price: boxCost(), level: `${covered}/30 shades`,
+        desc: `Holds ${capacity()} crayons of one shade. Pick the shade, then place it in the room.`,
+        buy: () => openPicker(null), custom: true,
       });
       items.push({
-        icon: '🪵', name: 'Shelf', price: shelfCost(), soldOut: state.shelves.length >= SHELF_SLOTS,
-        level: `${state.shelves.length}/${SHELF_SLOTS}`,
-        desc: `Holds ${SHELF_CAP} packed boxes. Every packed box on a shelf earns coins over time.`,
+        icon: '🪵', name: 'Shelf', price: shelfCost(), soldOut: state.shelves.length >= SHELF_SLOTS.length,
+        level: `${state.shelves.length}/${SHELF_SLOTS.length}`,
+        desc: `Hangs on the back wall and holds ${SHELF_CAP} packed boxes. Every packed box on a shelf earns coins over time.`,
         buy: () => {
           const used = new Set(state.shelves.map(s => s.slot));
-          const order = [1, 4, 2, 3, 0, 5];
-          const slot = order.find(s => !used.has(s));
-          state.shelves.push({ slot, packed: [] });
-          toast('New shelf hung on the wall!');
+          const slot = [2, 3, 1, 4, 0, 5].find(s => !used.has(s));
+          const s = { slot, packed: [] };
+          state.shelves.push(s);
+          buildShelf(s);
+          toast('New shelf hung on the back wall!');
         },
       });
     } else if (shopTab === 'upgrades') {
@@ -1284,7 +1617,8 @@
           desc: l >= u.max ? 'Maxed out!' : u.desc(l),
           buy: () => {
             state.upgrades[u.id]++;
-            if (u.id === 'bots') toast('Sortbot activated! Beep boop.');
+            if (u.id === 'bots') { syncBots(); toast('Sortbot activated! Beep boop.'); }
+            if (u.id === 'bigBox' || u.id === 'autoPack') state.boxes.forEach(refreshBox);
             if (u.id === 'autoPack') state.boxes.forEach(b => { if (b.count >= capacity()) packBox(b); });
           },
         });
@@ -1293,15 +1627,15 @@
       Object.entries(DECOR).forEach(([type, def]) => {
         const n = state.decor.filter(d => d.type === type).length;
         items.push({
-          icon: { plant: '🪴', rug: '🟣', lamp: '💡', beanbag: '🛋️', fishbowl: '🐟', catbed: '🐈', poster: '🌈', clock: '🕰️', window: '🪟', lights: '✨' }[type],
-          name: def.name, price: def.price, level: n ? `${n} owned` : '',
-          desc: `+${def.cozy}% cozy (boosts all coins). ${def.wall ? 'Hangs on the wall.' : 'Sits on the floor.'}`,
+          icon: def.icon, name: def.name, price: def.price, level: n ? `${n} owned` : '',
+          desc: `+${def.cozy}% cozy (boosts all coins). ${def.wall ? 'Hangs on a wall.' : 'Sits on the floor.'}`,
           buy: () => {
-            const spot = freeSpot(def.w, def.h, def.wall);
-            const d = { id: uid++, type, x: spot.x, y: spot.y };
+            const d = { type, x: player.x - Math.sin(player.yaw) * 2.5, y: def.wall ? 2.2 : 0, z: player.z - Math.cos(player.yaw) * 2.5, ry: 0 };
             state.decor.push(d);
-            if (!def.wall && !def.under) pushCrayonsOutOf(d.x, d.y, def.w, def.h);
-            toast(`${def.name} placed! Use ✋ Move to put it where you like.`);
+            buildDecor(d);
+            closeModals();
+            startPlacing('decor', d, true);
+            toast(def.wall ? 'Look at a wall and click to hang it.' : 'Look where you want it and click to place it.');
           },
         });
       });
@@ -1317,21 +1651,19 @@
     shopItems().forEach(it => {
       const el = document.createElement('div');
       el.className = 'item';
-      const sw = it.swatches ? `<div class="swatches">${it.swatches.map(c => `<span style="background:${c}"></span>`).join('')}</div>` : '';
-      el.innerHTML = `<h3><span>${it.icon}</span>${it.name}<span class="lvl">${it.level || ''}</span></h3>${sw}<p>${it.desc}</p>`;
+      el.innerHTML = `<h3><span>${it.icon}</span>${it.name}<span class="lvl">${it.level || ''}</span></h3><p>${it.desc}</p>`;
       const btn = document.createElement('button');
       btn.className = 'primary';
-      if (it.soldOut) { btn.textContent = it.level === 'Unlocked' ? 'Unlocked' : 'Maxed'; btn.disabled = true; btn.className = ''; }
+      if (it.soldOut) { btn.textContent = 'Maxed'; btn.disabled = true; btn.className = ''; }
       else btn.textContent = `Buy · 🪙 ${fmt(it.price)}`;
       btn.onclick = () => {
-        if (it.soldOut || it.locked || state.coins < it.price) return;
-        // Sorting boxes are paid for after picking a shade
-        if (it.name === 'Sorting Box') { it.buy(); return; }
+        if (it.soldOut || state.coins < it.price) return;
+        if (it.custom) { it.buy(); return; }
         state.coins -= it.price;
         it.buy();
         blip(880, 0.1, 'triangle', 0.06);
         save();
-        renderShop();
+        if (!$('shop').hidden) renderShop();
         updateHud();
       };
       el.appendChild(btn);
@@ -1342,59 +1674,39 @@
   }
 
   function refreshShopButtons() {
-    shopButtons.forEach(({ btn, it }) => {
-      if (it.soldOut) return;
-      btn.disabled = it.locked || state.coins < it.price;
-    });
+    shopButtons.forEach(({ btn, it }) => { if (!it.soldOut) btn.disabled = state.coins < it.price; });
   }
 
-  $('btnShop').onclick = () => {
-    if (editMode) setEditMode(false);
-    $('shop').hidden = false;
-    renderShop();
-    updateHud();
-  };
-  document.querySelectorAll('.tabs button').forEach(b => {
-    b.onclick = () => { shopTab = b.dataset.tab; renderShop(); };
-  });
-  document.querySelectorAll('[data-close]').forEach(b => {
-    b.onclick = () => { $(b.dataset.close).hidden = true; };
-  });
-  document.querySelectorAll('.modal').forEach(m => {
-    m.addEventListener('pointerdown', e => { if (e.target === m) m.hidden = true; });
-  });
+  $('btnShop').onclick = openShop;
+  document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { shopTab = b.dataset.tab; renderShop(); }; });
+  document.querySelectorAll('[data-close]').forEach(b => { b.onclick = () => { $(b.dataset.close).hidden = true; }; });
+  document.querySelectorAll('.modal').forEach(m => m.addEventListener('pointerdown', e => { if (e.target === m) m.hidden = true; }));
 
-  // Shade picker, used for buying a new box (box = null) or recoloring one
+  // Shade picker for a new box (box = null) or recoloring an empty one
   function openPicker(box) {
+    if (locked) document.exitPointerLock();
     $('pickerTitle').textContent = box ? 'Change this box to which shade?' : `New box (🪙 ${fmt(boxCost())}): which shade?`;
     const list = $('pickerList');
     list.innerHTML = '';
-    const counts = {};
-    state.crayons.forEach(c => { counts[c.c] = (counts[c.c] || 0) + 1; });
-    // Shades without a box come first, since those are the ones piling up
-    allShades().sort((a, b) => (state.boxes.some(x => x.color === a) - state.boxes.some(x => x.color === b)) || a - b).forEach(i => {
+    const counts = new Array(SHADES.length).fill(0);
+    cr.forEach(o => { counts[o.c]++; });
+    const hasBox = i => state.boxes.some(b => b.color === i);
+    SHADES.map((s, i) => i).sort((a, b) => (hasBox(a) - hasBox(b)) || a - b).forEach(i => {
       const s = SHADES[i];
-      const boxes = state.boxes.filter(b => b.color === i).length;
+      const nb = state.boxes.filter(b => b.color === i).length;
       const btn = document.createElement('button');
-      btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}<small>${counts[i] || 0} on floor · ${boxes} box${boxes === 1 ? '' : 'es'}</small></span>`;
+      btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}<small>${counts[i]} on the floor · ${nb ? nb + ' box' + (nb > 1 ? 'es' : '') : 'no box yet'}</small></span>`;
       btn.onclick = () => {
-        if (box) {
-          box.color = i;
-          selectItem(selected);
-        } else {
-          const cost = boxCost();
-          if (state.coins < cost) { toast('Not enough coins!'); return; }
-          state.coins -= cost;
-          state.extraBoxesBought++;
-          const spot = freeSpot(BW, BH, false);
-          state.boxes.push({ id: uid++, x: spot.x, y: spot.y, color: i, count: 0 });
-          pushCrayonsOutOf(spot.x, spot.y, BW, BH);
-          blip(880, 0.1, 'triangle', 0.06);
-          toast(`New ${s.name} box added! Use ✋ Move to place it.`);
-          if (!$('shop').hidden) renderShop();
-        }
-        $('picker').hidden = true;
-        save();
+        if (box) { box.color = i; refreshBox(box); save(); closeModals(); return; }
+        const cost = boxCost();
+        if (state.coins < cost) { toast('Not enough coins!'); return; }
+        state.coins -= cost;
+        state.extraBoxesBought++;
+        const b = addBox(player.x - Math.sin(player.yaw) * 2.5, player.z - Math.cos(player.yaw) * 2.5, i);
+        blip(880, 0.1, 'triangle', 0.06);
+        closeModals();
+        startPlacing('box', b, true);
+        toast(`New ${s.name} box! Look where you want it and click to place it.`);
         updateHud();
       };
       list.appendChild(btn);
@@ -1406,14 +1718,17 @@
   // Other buttons
   // ---------------------------------------------------------------------------
   $('btnDeliver').onclick = () => {
-    if (state.crayons.length > 300) return;
+    if (cr.length > 400) return;
     if (deliverPile()) state.deliveryT = deliveryInterval(state.upgrades.delivery);
   };
-  $('btnSound').onclick = () => {
-    muted = !muted;
-    $('btnSound').textContent = muted ? '🔇' : '🔊';
+  $('btnSound').onclick = () => { muted = !muted; $('btnSound').textContent = muted ? '🔇' : '🔊'; };
+  $('btnHelp').onclick = () => { if (locked) document.exitPointerLock(); $('help').hidden = false; };
+  $('btnLock').onclick = () => { if (locked) document.exitPointerLock(); else requestLock(); };
+  $('btnStart').onclick = () => {
+    $('help').hidden = true;
+    state.seenHelp = true;
+    if (!isTouch) requestLock();
   };
-  $('btnHelp').onclick = () => { $('help').hidden = false; };
   let resetArmed = 0;
   $('btnReset').onclick = () => {
     // Two-step confirm inside the page (browser confirm dialogs are not available everywhere)
@@ -1426,25 +1741,177 @@
     resetArmed = 0;
     $('btnReset').textContent = 'Reset all progress';
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
-    hand = []; bots = []; selected = null;
+    clearWorld();
     newGame();
-    touch();
-    $('help').hidden = true;
     save();
+    toast('Fresh room, fresh mess.');
   };
-  window.addEventListener('resize', resize);
-  window.addEventListener('beforeunload', save);
-  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+
+  // ---------------------------------------------------------------------------
+  // Save / load
+  // ---------------------------------------------------------------------------
+  function save() {
+    try {
+      const flat = [];
+      const r3 = v => Math.round(v * 1000) / 1000;
+      for (const o of cr) flat.push(r3(o.x), r3(o.y), r3(o.z), r3(o.ax), r3(o.ay), r3(o.az), o.c);
+      // crayons in your hands, in the air or on a bot go back to the floor in the save
+      const loose = [];
+      for (let i = 0; i < hand.n; i++) loose.push(hand.c);
+      flights.forEach(f => loose.push(f.c));
+      bots.forEach(b => b.carry.forEach(c => loose.push(c)));
+      const s = {
+        coins: state.coins, sorted: state.sorted, deliveryT: state.deliveryT, extraBoxesBought: state.extraBoxesBought,
+        upgrades: state.upgrades, seenHelp: state.seenHelp,
+        shelves: state.shelves,
+        boxes: state.boxes.map(({ x, z, rot, color, count }) => ({ x, z, rot, color, count })),
+        decor: state.decor.map(({ type, x, y, z, ry }) => ({ type, x, y, z, ry })),
+        player: { x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch },
+        crayons: flat, loose,
+      };
+      localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+    } catch (e) { /* storage may be unavailable */ }
+  }
+
+  function clearWorld() {
+    if (state) {
+      state.boxes.forEach(b => scene.remove(b.group));
+      state.decor.forEach(d => scene.remove(d.group));
+    }
+    shelfGroups.forEach(g => scene.remove(g));
+    shelfGroups.clear();
+    bots.forEach(b => scene.remove(b.g));
+    bots.length = 0;
+    flights.forEach(f => scene.remove(f.m));
+    flights.length = 0;
+    cr = [];
+    grid.clear();
+    animating.clear();
+    crayonMesh.count = 0;
+    hand.n = 0; hand.c = -1;
+    refreshHand();
+    placing = null;
+    lampLights = 0;
+  }
+
+  function newGame() {
+    state = freshState();
+    Object.assign(player, state.player);
+    START_BOXES.forEach((c, i) => addBox(-5 + i * 2, 7, c));
+    state.shelves.forEach(buildShelf);
+    // Crayons absolutely everywhere, plus some huge heaps. Every crayon is a random shade.
+    spawnCarpet(1800);
+    spawnPile(-6, -5, 1300);
+    spawnPile(5, -6, 1300);
+    spawnPile(-1, 0, 1100);
+    spawnPile(7, 3, 900);
+    spawnPile(-8, 4, 700);
+  }
+
+  function load() {
+    try {
+      const raw = localStorage.getItem(SAVE_KEY);
+      if (raw) {
+        const s = JSON.parse(raw);
+        state = freshState();
+        Object.assign(state, {
+          coins: s.coins || 0, sorted: s.sorted || 0, deliveryT: s.deliveryT ?? state.deliveryT,
+          extraBoxesBought: s.extraBoxesBought || 0, seenHelp: !!s.seenHelp,
+          upgrades: Object.assign(state.upgrades, s.upgrades || {}),
+          shelves: s.shelves && s.shelves.length ? s.shelves : state.shelves,
+          player: s.player || state.player,
+        });
+        Object.assign(player, state.player);
+        (s.boxes || []).forEach(b => addBox(b.x, b.z, b.color, b.rot || 0, b.count || 0));
+        (s.decor || []).forEach(d => { const o = { type: d.type, x: d.x, y: d.y || 0, z: d.z, ry: d.ry || 0 }; state.decor.push(o); buildDecor(o); });
+        state.shelves.forEach(buildShelf);
+        const f = s.crayons || [];
+        for (let i = 0; i + 6 < f.length && cr.length < MAX_CRAYONS; i += 7) {
+          pushCrayon({ x: f[i], y: f[i + 1], z: f[i + 2], ax: f[i + 3], ay: f[i + 4], az: f[i + 5], c: f[i + 6], dy: 0, vy: 0, delay: 0 });
+        }
+        (s.loose || []).forEach(c => addCrayon(player.x + rand(-1, 1), player.z + rand(-1, 1), c));
+        syncBots();
+        return;
+      }
+    } catch (e) {
+      clearWorld();
+    }
+    newGame();
+  }
+
+  // ---------------------------------------------------------------------------
+  // Main loop
+  // ---------------------------------------------------------------------------
+  let last = performance.now();
+  let time = 0, saveT = 0, hudT = 0;
+
+  function updateAnimating(dt) {
+    for (const o of animating) {
+      if (o.delay > 0) { o.delay -= dt; if (o.delay > 0) { writeMatrix(o); continue; } }
+      o.vy += 14 * dt;
+      o.dy -= o.vy * dt;
+      if (o.dy <= 0) {
+        o.dy = 0; o.vy = 0; o.delay = 0;
+        animating.delete(o);
+      }
+      writeMatrix(o);
+    }
+  }
+
+  function frame(now) {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
+    time += dt;
+
+    if (!anyModal()) updatePlayer(dt);
+    else { camera.position.set(player.x, player.eye, player.z); camera.rotation.set(player.pitch, player.yaw, 0); }
+    updateAim();
+    updatePlacing();
+    updateAnimating(dt);
+    updateFlights(dt);
+    syncBots();
+    bots.forEach(b => updateBot(b, dt));
+    updateGlow(time);
+    state.decor.forEach(d => d.update && d.update(time));
+
+    state.coins += shelfIncome() * dt;
+    state.deliveryT -= dt;
+    if (state.deliveryT <= 0) {
+      state.deliveryT = deliveryInterval(state.upgrades.delivery);
+      if (cr.length < maxFloor() - 50) deliverPile();
+    }
+
+    if (matDirty) { crayonMesh.instanceMatrix.needsUpdate = true; matDirty = false; }
+    if (colDirty) { crayonMesh.instanceColor.needsUpdate = true; colDirty = false; }
+
+    renderer.render(scene, camera);
+    updateAimLabel();
+    flushFloaters(dt);
+
+    saveT += dt;
+    if (saveT > 6) { saveT = 0; save(); }
+    hudT += dt;
+    if (hudT > 0.2) { hudT = 0; updateHud(); }
+    requestAnimationFrame(frame);
+  }
 
   // ---------------------------------------------------------------------------
   // Start
   // ---------------------------------------------------------------------------
+  window.addEventListener('resize', resize);
+  window.addEventListener('beforeunload', save);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+
   load();
   resize();
+  refreshHand();
   updateHud();
-  if (!state.seenHelp) { $('help').hidden = false; state.seenHelp = true; }
+  $('help').hidden = false;
   requestAnimationFrame(frame);
 
   // Exposed for debugging in the console
-  window.craySorting = { get state() { return state; }, SHADES, save };
+  window.craySorting = {
+    get state() { return state; }, get crayons() { return cr; }, get aim() { return aim; },
+    player, SHADES, save, act, pickUp, tossToBox, hand, camera,
+  };
 })();
