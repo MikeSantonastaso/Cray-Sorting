@@ -1,6 +1,6 @@
 # Cray Sorting
 
-A first-person 3D sorting game. You're standing in a room buried under 20,000 completely mixed-up crayons (30 shades across 10 color families) heaped into mountains. There are no waves and no timers: it's one huge, daunting job. Lay out your boxes and shelves however you like, toss each crayon into the box for its exact shade, and keep going until the floor is clean.
+A first-person 3D sorting game. You're standing in a room buried under 60,000 completely mixed-up crayons (30 shades across 10 color families) covering every inch of the floor. There are no waves and no timers: it's one huge, daunting job. Lay out your boxes and shelves however you like, toss each crayon into the box for its exact shade, and keep going until the floor is clean.
 
 ## How to run
 

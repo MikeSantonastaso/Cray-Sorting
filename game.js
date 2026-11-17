@@ -6,16 +6,16 @@
   // World constants (units are roughly meters)
   // ---------------------------------------------------------------------------
   const HALF = 12;            // room is 24 x 24
-  const WALL_H = 5.2;
-  const CL = 0.42;            // crayon length (chunky, toy-sized crayons)
-  const CR = 0.045;           // crayon radius
-  const TOTAL = 20000;        // the whole job: this many crayons, all mixed up
-  const MAX_CRAYONS = TOTAL + 500;
+  const WALL_H = 6.5;
+  const CL = 0.3;             // crayon length (a bit bigger than real life, so you can see them)
+  const CR = 0.032;           // crayon radius
+  const TOTAL = 60000;        // the whole job: this many crayons, all mixed up
+  const MAX_CRAYONS = TOTAL + 1000;
   const BOX_W = 1.1, BOX_D = 0.8, BOX_H = 0.7;
   const PICK_DIST = 3.6;      // how far away you can grab a crayon
   const TOSS_DIST = 16;       // how far away you can toss into a box
   const SHELF_CAP = 12;       // packed boxes per shelf unit (3 levels x 4)
-  const SAVE_KEY = 'cray-sorting-3d-v2';
+  const SAVE_KEY = 'cray-sorting-3d-v4';
   const TAU = Math.PI * 2;
 
   // Every color family comes in three shades. Each shade is sorted on its own.
@@ -268,13 +268,18 @@
   }
 
   const crayonGeo = (() => {
-    const body = new T.CylinderGeometry(CR, CR, CL - 0.08, 6);
-    body.translate(0, -0.04, 0);
-    const tip = new T.CylinderGeometry(0.012, CR, 0.08, 6);
-    tip.translate(0, CL / 2 - 0.04, 0);
-    const wrap = new T.CylinderGeometry(CR * 1.12, CR * 1.12, 0.2, 6);
-    wrap.translate(0, -0.05, 0);
-    const g = mergeGeos([[body, 1], [tip, 1], [wrap, 0.62]]);
+    // low-poly on purpose: there are tens of thousands of these
+    const tipLen = CL * 0.2;
+    const body = new T.CylinderGeometry(CR, CR, CL - tipLen, 6, 1, true);
+    body.translate(0, -tipLen / 2, 0);
+    const base = new T.CircleGeometry(CR, 6);
+    base.rotateX(Math.PI / 2);
+    base.translate(0, -CL / 2, 0);
+    const tip = new T.CylinderGeometry(CR * 0.25, CR, tipLen, 6, 1, false);
+    tip.translate(0, CL / 2 - tipLen / 2, 0);
+    const wrap = new T.CylinderGeometry(CR * 1.1, CR * 1.1, CL * 0.48, 6, 1, true);
+    wrap.translate(0, -CL * 0.12, 0);
+    const g = mergeGeos([[body, 1], [base, 0.8], [tip, 1], [wrap, 0.62]]);
     g.rotateZ(-Math.PI / 2); // long axis along +X, tip at +X
     g.computeBoundingSphere();
     return g;
@@ -336,7 +341,7 @@
   }
 
   // Height a crayon's center would rest at, at (x, z)
-  const CONTACT = 0.13;
+  const CONTACT = 0.095;
   function supportAt(x, z) {
     let top = CR;
     forNear(x, z, CONTACT, o => {
@@ -395,10 +400,10 @@
       let best = null, by = y;
       for (let j = 0; j < 6; j++) {
         const a = Math.random() * TAU;
-        const nx = x + Math.cos(a) * 0.2, nz = z + Math.sin(a) * 0.2;
+        const nx = x + Math.cos(a) * 0.14, nz = z + Math.sin(a) * 0.14;
         if (Math.abs(nx) > HALF - 0.3 || Math.abs(nz) > HALF - 0.3 || blockedAt(nx, nz)) continue;
         const ny = supportAt(nx, nz);
-        if (ny < by - 0.17) { by = ny; best = [nx, nz]; }
+        if (ny < by - 0.1) { by = ny; best = [nx, nz]; }
       }
       if (!best) break;
       [x, z] = best; y = by;
@@ -457,8 +462,8 @@
     while (queue.length && guard++ < 250) {
       const [qx, qz, qy] = queue.shift();
       const list = [];
-      forNear(qx, qz, 0.22, o => {
-        if (o.y > qy + 0.01 && (o.x - qx) ** 2 + (o.z - qz) ** 2 < 0.22 * 0.22) list.push(o);
+      forNear(qx, qz, 0.16, o => {
+        if (o.y > qy + 0.01 && (o.x - qx) ** 2 + (o.z - qz) ** 2 < 0.16 * 0.16) list.push(o);
       });
       list.sort((a, b) => a.y - b.y);
       for (const o of list) {
@@ -852,7 +857,7 @@
       }
     }
     // wade up onto piles a little
-    const target = 1.65 + Math.min(2.6, topAt(player.x, player.z, 0.35)) * 0.9;
+    const target = 1.65 + Math.min(4.6, topAt(player.x, player.z, 0.35)) * 0.92;
     player.eye += (target - player.eye) * Math.min(1, dt * 6);
     camera.position.set(player.x, player.eye, player.z);
     camera.rotation.set(player.pitch, player.yaw, 0);
@@ -997,7 +1002,7 @@
   const hand = { c: -1, n: 0 };
   const handGroup = new T.Group();
   handGroup.position.set(0.22, -0.17, -0.42);
-  handGroup.scale.setScalar(0.32);
+  handGroup.scale.setScalar(0.42);
   camera.add(handGroup);
   const handMeshes = [];
   for (let i = 0; i < 9; i++) {
@@ -1769,10 +1774,18 @@
   // ---------------------------------------------------------------------------
   function save() {
     try {
-      const flat = new Array(cr.length * 7);
-      const r3 = v => Math.round(v * 1000) / 1000;
+      // Crayons are packed into 16-bit integers and base64, so 60,000 of them save quickly
+      const buf = new Int16Array(cr.length * 7);
       let k = 0;
-      for (const o of cr) { flat[k++] = r3(o.x); flat[k++] = r3(o.y); flat[k++] = r3(o.z); flat[k++] = r3(o.ax); flat[k++] = r3(o.ay); flat[k++] = r3(o.az); flat[k++] = o.c; }
+      for (const o of cr) {
+        buf[k++] = Math.round(o.x * 1000); buf[k++] = Math.round(o.y * 1000); buf[k++] = Math.round(o.z * 1000);
+        buf[k++] = Math.round(o.ax * 32000); buf[k++] = Math.round(o.ay * 32000); buf[k++] = Math.round(o.az * 32000);
+        buf[k++] = o.c;
+      }
+      const bytes = new Uint8Array(buf.buffer);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      const flat = btoa(bin);
       // crayons in your hands, in the air or on a bot go back to the floor in the save
       const loose = [];
       for (let i = 0; i < hand.n; i++) loose.push(hand.c);
@@ -1812,21 +1825,28 @@
     state = freshState();
     recomputeUnlocks();
     Object.assign(player, state.player);
-    START_BOXES.forEach((c, i) => addBox(-5 + i * 2, 8.2, c));
+    START_BOXES.forEach((c, i) => addBox(-5 + i * 2, 8.6, c));
     [-4, 4].forEach(x => {
       const d = { type: 'shelf', x, y: 0, z: 11.4, ry: Math.PI, packed: [] };
       state.decor.push(d);
       buildDecor(d);
     });
-    // An absurd amount of crayons. A layer over the whole floor, then mountains on top.
+    // An absurd amount of crayons covering every bit of floor, drifted into heaps.
     // Every crayon is a random shade, so there's no pre-sorting anywhere.
-    spawnCarpet(3500);
-    const heaps = [[-6, -5, 4200], [5.5, -6, 3800], [-1, -0.5, 3300], [7, 3.5, 2400], [-8, 4, 1800], [1.5, 5, 1000]];
-    let left = TOTAL - cr.length;
-    heaps.forEach(([x, z, n], i) => {
-      const k = i === heaps.length - 1 ? left : Math.min(n, left);
-      left -= spawnPile(x, z, k);
-    });
+    const heaps = [[-6, -6, 3.5], [5, -7, 3], [-1, -1, 3.2], [7.5, 2, 2.6], [-8, 3.5, 2.4], [1, 4.5, 2], [-4, 8, 1.6], [9, -1.5, 1.8]];
+    const depth = (x, z) => {
+      let h = 0.6 + 0.35 * Math.sin(x * 0.7) * Math.cos(z * 0.55);
+      for (const [hx, hz, r] of heaps) h += 2.6 * Math.max(0, 1 - Math.hypot(x - hx, z - hz) / r) ** 1.3;
+      const clear = Math.hypot(x / 5.5, (z - 9.6) / 2.4);   // a thinner patch where your first boxes sit
+      if (clear < 1) h *= 0.25 + 0.75 * clear;
+      return h;
+    };
+    let tries = 0;
+    while (cr.length < TOTAL && tries++ < TOTAL * 40) {
+      const x = rand(-HALF + 0.3, HALF - 0.3), z = rand(-HALF + 0.3, HALF - 0.3);
+      if (Math.random() * 3.6 > depth(x, z)) continue;
+      addCrayon(x, z, randomShade());
+    }
     while (cr.length < TOTAL) spawnCarpet(TOTAL - cr.length);
   }
 
@@ -1849,9 +1869,12 @@
           state.decor.push(o);
           buildDecor(o);
         });
-        const f = s.crayons || [];
+        const bin = atob(s.crayons || '');
+        const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        const f = new Int16Array(bytes.buffer, 0, Math.floor(bytes.length / 2));
         for (let i = 0; i + 6 < f.length && cr.length < MAX_CRAYONS; i += 7) {
-          pushCrayon({ x: f[i], y: f[i + 1], z: f[i + 2], ax: f[i + 3], ay: f[i + 4], az: f[i + 5], c: f[i + 6], dy: 0, vy: 0, delay: 0 });
+          pushCrayon({ x: f[i] / 1000, y: f[i + 1] / 1000, z: f[i + 2] / 1000, ax: f[i + 3] / 32000, ay: f[i + 4] / 32000, az: f[i + 5] / 32000, c: f[i + 6], dy: 0, vy: 0, delay: 0 });
         }
         (s.loose || []).forEach(c => addCrayon(player.x + rand(-1, 1), player.z + rand(-1, 1), c));
         syncBots();
@@ -1908,7 +1931,7 @@
     flushFloaters(dt);
 
     saveT += dt;
-    if (saveT > 15) { saveT = 0; save(); }
+    if (saveT > 20) { saveT = 0; save(); }
     hudT += dt;
     if (hudT > 0.2) { hudT = 0; updateHud(); }
     requestAnimationFrame(frame);
