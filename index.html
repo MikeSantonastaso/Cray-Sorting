@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cray Sorting</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header id="hud">
+    <div class="brand">🖍️ Cray Sorting</div>
+    <div class="stats">
+      <span id="coins" class="pill big">🪙 0</span>
+      <span id="income" class="pill">+0/s</span>
+      <span id="cozy" class="pill">Cozy +0%</span>
+      <span id="floorCount" class="pill">0 crayons on the floor</span>
+      <span id="delivery" class="pill">Next pile in 45s</span>
+    </div>
+    <div class="buttons">
+      <button id="btnDeliver" title="Get a new pile now (only when the floor is nearly clean)">📦 New pile</button>
+      <button id="btnShop" class="primary">🛒 Shop</button>
+      <button id="btnEdit" title="Move boxes and decorations around">✋ Move</button>
+      <button id="btnSound" title="Sound on/off">🔊</button>
+      <button id="btnHelp" title="How to play">?</button>
+    </div>
+  </header>
+
+  <main id="stage">
+    <canvas id="game"></canvas>
+    <div id="tooltip" hidden></div>
+    <div id="toast"></div>
+    <div id="editPanel" hidden>
+      <span id="editName"></span>
+      <button id="btnRecolor">🎨 Change shade</button>
+      <button id="btnPutAway">🗑️ Put away (50% refund)</button>
+      <button id="btnDoneEdit" class="primary">Done</button>
+    </div>
+  </main>
+
+  <div id="shop" class="modal" hidden>
+    <div class="card wide">
+      <div class="card-head">
+        <h2>🛒 Shop</h2>
+        <span id="shopCoins" class="pill big">🪙 0</span>
+        <button class="close" data-close="shop">✕</button>
+      </div>
+      <nav class="tabs">
+        <button data-tab="storage" class="active">📦 Boxes &amp; Shelves</button>
+        <button data-tab="upgrades">⚡ Upgrades</button>
+        <button data-tab="decor">🪴 Decorations</button>
+      </nav>
+      <div id="shopList" class="shop-list"></div>
+    </div>
+  </div>
+
+  <div id="picker" class="modal" hidden>
+    <div class="card">
+      <div class="card-head">
+        <h2 id="pickerTitle">Pick a shade for this box</h2>
+        <button class="close" data-close="picker">✕</button>
+      </div>
+      <div id="pickerList" class="picker-list"></div>
+    </div>
+  </div>
+
+  <div id="help" class="modal" hidden>
+    <div class="card">
+      <div class="card-head">
+        <h2>How to play</h2>
+        <button class="close" data-close="help">✕</button>
+      </div>
+      <div class="help-body">
+        <p>Your room is buried under <b>thousands of completely mixed-up crayons</b>: 30 shades across 10 colors, all jumbled together. Each shade gets its own sorting box, and you start with boxes for only 6 of them.</p>
+        <ul>
+          <li><b>Grab</b>: click a crayon to pick it up. (The Bigger Handfuls upgrade lets you scoop up several of the same shade at once.)</li>
+          <li><b>Sort</b>: click (or drag onto) the box with the matching shade. Every crayon earns coins.</li>
+          <li><b>Hover</b> a crayon to see its shade name. Shades are sneaky!</li>
+          <li><b>Pack</b>: when a box is full, click it to pack it up for a bonus. Packed boxes go on your shelves and earn coins over time.</li>
+          <li><b>Shop</b>: buy boxes for the other shades, shelves, decorations (they make the room cozier, which boosts every coin you earn) and upgrades like bigger handfuls, shade highlighting and little Sortbots that sort for you.</li>
+          <li><b>Move</b>: rearrange boxes and decorations however you like.</li>
+        </ul>
+        <p>New piles get dumped in every so often. Progress saves automatically in this browser.</p>
+        <p class="muted"><button id="btnReset" class="danger">Reset all progress</button></p>
+      </div>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
