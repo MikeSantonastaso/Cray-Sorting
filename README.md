@@ -20,7 +20,7 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Pick up a crayon | Click it (look at a crayon to see its shade name) |
 | Toss into a box | Click the box while holding crayons |
 | Drop crayons | Click the floor, or press `Q` |
-| Pack a full box | Click it. Packed boxes go onto your wall shelves |
+| Pack a full box | Click it. It goes onto the nearest shelf unit with room |
 | Build menu (free boxes, shelves, furniture) | `E` |
 | Collection (unlocks and progress) | `F` |
 | Move a box, shelf or decoration | Look at it and press `G`, then click to place (`R` rotates, `X` puts it away) |
@@ -36,7 +36,7 @@ On phones and tablets there's an on-screen joystick for walking; drag to look an
 
 ## Files
 
-- `index.html`: page, HUD and shop dialogs
+- `index.html`: page, HUD and build menu
 - `style.css`: styling
-- `game.js`: the whole game (3D scene, crayon piles, controls, shop, saving)
+- `game.js`: the whole game (3D scene, crayon piles, controls, unlocks, saving)
 - `vendor/three.min.js`: Three.js r128 (MIT, see `vendor/three.LICENSE`)
