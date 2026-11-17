@@ -6,16 +6,16 @@
   // World constants (units are roughly meters)
   // ---------------------------------------------------------------------------
   const HALF = 12;            // room is 24 x 24
-  const WALL_H = 4.6;
+  const WALL_H = 5.2;
   const CL = 0.42;            // crayon length (chunky, toy-sized crayons)
   const CR = 0.045;           // crayon radius
-  const MAX_CRAYONS = 10000;
+  const TOTAL = 20000;        // the whole job: this many crayons, all mixed up
+  const MAX_CRAYONS = TOTAL + 500;
   const BOX_W = 1.1, BOX_D = 0.8, BOX_H = 0.7;
   const PICK_DIST = 3.6;      // how far away you can grab a crayon
   const TOSS_DIST = 16;       // how far away you can toss into a box
-  const SHELF_SLOTS = [-9, -5.4, -1.8, 1.8, 5.4, 9];
-  const SHELF_CAP = 5;
-  const SAVE_KEY = 'cray-sorting-3d-v1';
+  const SHELF_CAP = 12;       // packed boxes per shelf unit (3 levels x 4)
+  const SAVE_KEY = 'cray-sorting-3d-v2';
   const TAU = Math.PI * 2;
 
   // Every color family comes in three shades. Each shade is sorted on its own.
@@ -32,58 +32,59 @@
     { name: 'Grays',   shades: [['Snow', '#f7f7f7'], ['Silver', '#a9a9a9'], ['Charcoal', '#343434']] },
   ];
   const SHADES = [];
-  FAMILIES.forEach((f, fi) => f.shades.forEach(([name, hex]) => {
-    SHADES.push({ name, hex, family: fi, value: 1 + Math.floor(fi / 2) });
-  }));
+  FAMILIES.forEach((f, fi) => f.shades.forEach(([name, hex]) => SHADES.push({ name, hex, family: fi })));
   const SHADE_COLORS = SHADES.map(s => new T.Color(s.hex));
-  // The boxes you start with: the middle shade of the first six families
+  // The boxes already in the room when you start: the middle shade of the first six families
   const START_BOXES = [1, 4, 7, 10, 13, 16];
 
   const DECOR = {
-    plant:    { name: 'Potted Plant',       icon: '🪴', price: 40,  cozy: 2,  r: 0.4,  cy: 0.6 },
-    rug:      { name: 'Cozy Rug',           icon: '🟣', price: 60,  cozy: 3,  r: 1.5,  cy: 0.05, under: true },
-    lamp:     { name: 'Floor Lamp',         icon: '💡', price: 70,  cozy: 3,  r: 0.35, cy: 0.9 },
-    beanbag:  { name: 'Beanbag',            icon: '🛋️', price: 90,  cozy: 4,  r: 0.7,  cy: 0.35 },
-    fishbowl: { name: 'Fish Bowl',          icon: '🐟', price: 150, cozy: 6,  r: 0.45, cy: 0.8 },
-    catbed:   { name: 'Cat Bed (with cat)', icon: '🐈', price: 250, cozy: 10, r: 0.65, cy: 0.25 },
-    poster:   { name: 'Rainbow Poster',     icon: '🌈', price: 50,  cozy: 2,  r: 0.7,  wall: true },
-    clock:    { name: 'Wall Clock',         icon: '🕰️', price: 45,  cozy: 2,  r: 0.45, wall: true },
-    window:   { name: 'Window',             icon: '🪟', price: 100, cozy: 4,  r: 1.0,  wall: true },
-    lights:   { name: 'Fairy Lights',       icon: '✨', price: 120, cozy: 5,  r: 1.6,  wall: true },
+    shelf:    { name: 'Shelf Unit',         icon: '🗄️', r: 0.75, cy: 1.0, free: true, desc: 'Holds 12 packed boxes. Full boxes you pack go to the nearest shelf with room.' },
+    plant:    { name: 'Potted Plant',       icon: '🪴', r: 0.4,  cy: 0.6 },
+    rug:      { name: 'Cozy Rug',           icon: '🟣', r: 1.5,  cy: 0.05, under: true },
+    lamp:     { name: 'Floor Lamp',         icon: '💡', r: 0.35, cy: 0.9 },
+    beanbag:  { name: 'Beanbag',            icon: '🛋️', r: 0.7,  cy: 0.35 },
+    fishbowl: { name: 'Fish Bowl',          icon: '🐟', r: 0.45, cy: 0.8 },
+    catbed:   { name: 'Cat Bed (with cat)', icon: '🐈', r: 0.65, cy: 0.25 },
+    poster:   { name: 'Rainbow Poster',     icon: '🌈', r: 0.7,  wall: true },
+    clock:    { name: 'Wall Clock',         icon: '🕰️', r: 0.45, wall: true },
+    window:   { name: 'Window',             icon: '🪟', r: 1.0,  wall: true },
+    lights:   { name: 'Fairy Lights',       icon: '✨', r: 1.6,  wall: true },
   };
 
-  const handSize = l => [1, 3, 5, 8, 12, 16, 22][l];
-  const scoop = l => 0.45 + l * 0.3;
-  const boxCap = l => 20 + l * 10;
-  const deliveryInterval = l => 45 - l * 7;
-  const pileSize = l => 300 + l * 100;
-  const botCarry = l => 1 + Math.floor((l + 1) / 2);
-  const walkSpeed = l => 4 * (1 + l * 0.15);
+  // Upgrades. Their level is how many of their rewards you've unlocked.
+  const UPGRADES = {
+    hand:     { name: 'Bigger Handfuls', icon: '🤲', info: l => `Grab ${handSize(l)} crayons of the same shade at once` },
+    reach:    { name: 'Wide Scoop',      icon: '🥄', info: l => `Scoop matching crayons from ${scoop(l).toFixed(2)}m around` },
+    glow:     { name: 'Shade Spotter',   icon: '🔦', info: l => l >= 2 ? 'Looking at a crayon lights up its whole shade' : 'Crayons you hold light up their whole shade and their box' },
+    bigBox:   { name: 'Roomier Boxes',   icon: '📦', info: l => `Boxes hold ${boxCap(l)} crayons` },
+    speed:    { name: 'Comfy Sneakers',  icon: '👟', info: l => `Walk ${l * 15}% faster` },
+    autoPack: { name: 'Tape Gun',        icon: '🧷', info: () => 'Full boxes pack themselves' },
+    bots:     { name: 'Sortbot',         icon: '🤖', info: l => `${l} little robot${l > 1 ? 's' : ''} sorting alongside you` },
+    botSpeed: { name: 'Sortbot Turbo',   icon: '⚙️', info: () => 'Sortbots drive faster and carry more' },
+  };
 
-  const UPGRADES = [
-    { id: 'hand', name: 'Bigger Handfuls', icon: '🤲', max: 6, base: 30, mult: 2.1,
-      desc: l => `Grab up to ${handSize(l + 1)} crayons of the same shade in one click (now ${handSize(l)}).` },
-    { id: 'reach', name: 'Wide Scoop', icon: '🥄', max: 4, base: 45, mult: 2.2,
-      desc: l => `Scoop matching crayons from a wider area (${scoop(l).toFixed(2)}m → ${scoop(l + 1).toFixed(2)}m).` },
-    { id: 'glow', name: 'Shade Spotter', icon: '🔦', max: 2, base: 60, mult: 4,
-      desc: l => l === 0 ? 'While you hold crayons, every crayon of that shade glows, and so does its box.'
-                         : 'Just looking at a crayon lights up its whole shade and its box.' },
-    { id: 'bigBox', name: 'Roomier Boxes', icon: '📦', max: 5, base: 50, mult: 2,
-      desc: l => `Boxes hold ${boxCap(l + 1)} crayons (now ${boxCap(l)}).` },
-    { id: 'pay', name: 'Collector Reputation', icon: '⭐', max: 8, base: 75, mult: 2,
-      desc: l => `+25% coins for every crayon sorted (now +${l * 25}%).` },
-    { id: 'speed', name: 'Comfy Sneakers', icon: '👟', max: 4, base: 40, mult: 2.2,
-      desc: l => `Walk 15% faster (now +${l * 15}%).` },
-    { id: 'delivery', name: 'Bigger Deliveries', icon: '🚚', max: 4, base: 80, mult: 2.3,
-      desc: l => `New piles arrive every ${deliveryInterval(l + 1)}s with ${pileSize(l + 1)} crayons.` },
-    { id: 'autoPack', name: 'Tape Gun', icon: '🧷', max: 1, base: 300, mult: 1,
-      desc: () => 'Full boxes pack themselves and go straight onto a shelf.' },
-    { id: 'bots', name: 'Sortbot', icon: '🤖', max: 4, base: 250, mult: 3,
-      desc: l => `A little robot that roams the piles and sorts crayons for you. (${l} owned)` },
-    { id: 'botSpeed', name: 'Sortbot Turbo', icon: '⚙️', max: 5, base: 200, mult: 2,
-      desc: l => `Sortbots drive faster and carry more (${botCarry(l)} → ${botCarry(l + 1)} crayons).` },
+  // Rewards: sort enough crayons from a color family to unlock each one.
+  const TIERS = [30, 120, 300];
+  const REWARDS = [
+    /* Reds    */ [{ up: 'hand' },   { decor: 'plant' },    { up: 'hand' }],
+    /* Blues   */ [{ up: 'reach' },  { decor: 'rug' },      { up: 'bots' }],
+    /* Yellows */ [{ up: 'glow' },   { decor: 'lamp' },     { up: 'glow' }],
+    /* Greens  */ [{ up: 'speed' },  { decor: 'beanbag' },  { up: 'bigBox' }],
+    /* Oranges */ [{ up: 'bigBox' }, { decor: 'poster' },   { up: 'autoPack' }],
+    /* Purples */ [{ up: 'hand' },   { decor: 'lights' },   { up: 'bots' }],
+    /* Pinks   */ [{ up: 'reach' },  { decor: 'catbed' },   { up: 'hand' }],
+    /* Browns  */ [{ up: 'hand' },   { decor: 'clock' },    { up: 'reach' }],
+    /* Teals   */ [{ up: 'speed' },  { decor: 'fishbowl' }, { up: 'botSpeed' }],
+    /* Grays   */ [{ decor: 'window' }, { up: 'bigBox' },   { up: 'bots' }],
   ];
+  const rewardName = r => r.up ? UPGRADES[r.up].name : DECOR[r.decor].name;
+  const rewardIcon = r => r.up ? UPGRADES[r.up].icon : DECOR[r.decor].icon;
 
+  const handSize = l => [1, 3, 6, 10, 15, 20][Math.min(l, 5)];
+  const scoop = l => 0.45 + l * 0.35;
+  const boxCap = l => 30 + l * 15;
+  const botCarry = l => 2 + l * 2;
+  const walkSpeed = l => 4 * (1 + l * 0.15);
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -110,27 +111,35 @@
 
   function freshState() {
     return {
-      coins: 0,
       sorted: 0,
+      familySorted: FAMILIES.map(() => 0),
       boxes: [],
-      shelves: [{ slot: 2, packed: [] }],
       decor: [],
-      upgrades: Object.fromEntries(UPGRADES.map(u => [u.id, 0])),
-      deliveryT: deliveryInterval(0),
-      extraBoxesBought: 0,
-      player: { x: 0, z: 9.5, yaw: 0, pitch: -0.32 },
-      seenHelp: false,
+      player: { x: 0, z: 10, yaw: 0, pitch: -0.3 },
+      done: false,
     };
   }
 
-  const cozyPct = () => Math.min(100, state.decor.reduce((s, d) => s + DECOR[d.type].cozy, 0));
-  const coinMult = () => (1 + state.upgrades.pay * 0.25) * (1 + cozyPct() / 100);
-  const capacity = () => boxCap(state.upgrades.bigBox);
-  const maxFloor = () => 8400 + state.upgrades.delivery * 400;
-  const upgradeCost = u => Math.round(u.base * Math.pow(u.mult, state.upgrades[u.id]));
-  const boxCost = () => Math.round(20 * Math.pow(1.18, state.extraBoxesBought));
-  const shelfCost = () => Math.round(80 * Math.pow(1.8, state.shelves.length - 1));
-
+  // Which rewards have been earned, and the upgrade levels they add up to
+  function earnedRewards() {
+    const out = [];
+    REWARDS.forEach((tiers, fi) => tiers.forEach((r, ti) => {
+      if (state.familySorted[fi] >= TIERS[ti]) out.push({ ...r, fi, ti });
+    }));
+    return out;
+  }
+  let levels = {};
+  let unlockedDecor = new Set();
+  function recomputeUnlocks() {
+    levels = Object.fromEntries(Object.keys(UPGRADES).map(k => [k, 0]));
+    unlockedDecor = new Set(Object.keys(DECOR).filter(k => DECOR[k].free));
+    for (const r of earnedRewards()) {
+      if (r.up) levels[r.up]++;
+      else unlockedDecor.add(r.decor);
+    }
+  }
+  const lvl = id => levels[id] || 0;
+  const capacity = () => boxCap(lvl('bigBox'));
   // ---------------------------------------------------------------------------
   // Renderer, scene, camera
   // ---------------------------------------------------------------------------
@@ -259,11 +268,11 @@
   }
 
   const crayonGeo = (() => {
-    const body = new T.CylinderGeometry(CR, CR, CL - 0.08, 8);
+    const body = new T.CylinderGeometry(CR, CR, CL - 0.08, 6);
     body.translate(0, -0.04, 0);
-    const tip = new T.CylinderGeometry(0.012, CR, 0.08, 8);
+    const tip = new T.CylinderGeometry(0.012, CR, 0.08, 6);
     tip.translate(0, CL / 2 - 0.04, 0);
-    const wrap = new T.CylinderGeometry(CR * 1.12, CR * 1.12, 0.2, 8);
+    const wrap = new T.CylinderGeometry(CR * 1.12, CR * 1.12, 0.2, 6);
     wrap.translate(0, -0.05, 0);
     const g = mergeGeos([[body, 1], [tip, 1], [wrap, 0.62]]);
     g.rotateZ(-Math.PI / 2); // long axis along +X, tip at +X
@@ -275,7 +284,7 @@
   const crayonMesh = new T.InstancedMesh(crayonGeo, crayonMat, MAX_CRAYONS);
   crayonMesh.setColorAt(0, new T.Color(1, 1, 1)); // creates the per-instance color buffer
   crayonMesh.count = 0;
-  crayonMesh.castShadow = true;
+  crayonMesh.castShadow = false; // 20,000 shadow casters would be too heavy
   crayonMesh.receiveShadow = true;
   crayonMesh.frustumCulled = false;
   scene.add(crayonMesh);
@@ -357,7 +366,10 @@
     for (const d of state.decor) {
       const def = DECOR[d.type];
       if (def.wall || def.under) continue;
-      if ((x - d.x) ** 2 + (z - d.z) ** 2 < (def.r + pad) ** 2) return d;
+      if (d.type === 'shelf') {
+        const lx = x - d.x, lz = z - d.z, c = Math.cos(d.ry || 0), sn = Math.sin(d.ry || 0);
+        if (Math.abs(lx * c - lz * sn) < 1.08 + pad && Math.abs(lx * sn + lz * c) < 0.3 + pad) return d;
+      } else if ((x - d.x) ** 2 + (z - d.z) ** 2 < (def.r + pad) ** 2) return d;
     }
     return null;
   }
@@ -465,36 +477,21 @@
 
   const randomShade = () => Math.floor(Math.random() * SHADES.length);
 
-  function spawnPile(cx, cz, n, animate) {
-    const radius = 0.6 + Math.sqrt(n) * 0.06;
+  function spawnPile(cx, cz, n) {
+    const radius = 0.6 + Math.sqrt(n) * 0.05;
     let placed = 0;
     for (let i = 0; i < n * 3 && placed < n; i++) {
       const r = Math.abs(gauss()) * radius;
       const a = Math.random() * TAU;
       const x = cx + Math.cos(a) * r, z = cz + Math.sin(a) * r;
       if (Math.abs(x) > HALF - 0.4 || Math.abs(z) > HALF - 0.4) continue;
-      if (addCrayon(x, z, randomShade(), animate ? rand(4, 5.5) : 0, animate ? rand(0, 1.6) : 0)) placed++;
+      if (addCrayon(x, z, randomShade())) placed++;
     }
     return placed;
   }
 
   function spawnCarpet(n) {
     for (let i = 0; i < n; i++) addCrayon(rand(-HALF + 0.5, HALF - 0.5), rand(-HALF + 0.5, HALF - 0.5), randomShade());
-  }
-
-  function deliverPile() {
-    const space = maxFloor() - cr.length;
-    if (space < 50) { toast('The room is too full for another pile. Sort some crayons!'); return false; }
-    const n = Math.min(pileSize(state.upgrades.delivery), space);
-    let cx = 0, cz = 0;
-    for (let i = 0; i < 40; i++) {
-      cx = rand(-HALF + 3, HALF - 3); cz = rand(-HALF + 3, HALF - 3);
-      if (!blockedAt(cx, cz, 1.2) && Math.hypot(cx - player.x, cz - player.z) > 2.5) break;
-    }
-    spawnPile(cx, cz, n, true);
-    blip(180, 0.4, 'triangle', 0.07);
-    toast(`Look out! ${n} more crayons just got dumped in.`);
-    return true;
   }
 
   // ---------------------------------------------------------------------------
@@ -527,7 +524,7 @@
     roundRect(g, c.width / 2 - 110, 88, 220, 40, 14); g.fill();
     g.fillStyle = '#fff';
     g.font = 'bold 26px "Trebuchet MS", sans-serif';
-    g.fillText(full ? (state.upgrades.autoPack ? 'Packing…' : 'FULL! Click to pack') : `${b.count} / ${capacity()}`, c.width / 2, 109, 210);
+    g.fillText(full ? (lvl('autoPack') ? 'Packing…' : 'FULL! Click to pack') : `${b.count} / ${capacity()}`, c.width / 2, 109, 210);
     b.labelTex.needsUpdate = true;
   }
 
@@ -596,56 +593,28 @@
 
   function packBox(b) {
     if (b.count < capacity()) return;
-    const v = SHADES[b.color].value;
-    const bonus = capacity() * v * 0.5 * coinMult();
+    // the nearest shelf unit with room gets the packed box
+    let shelf = null, bd = Infinity;
+    for (const d of state.decor) {
+      if (d.type !== 'shelf' || d.packed.length >= SHELF_CAP) continue;
+      const dist = (d.x - b.x) ** 2 + (d.z - b.z) ** 2;
+      if (dist < bd) { bd = dist; shelf = d; }
+    }
+    if (!shelf) {
+      toast('No shelf space! Place a Shelf Unit (E → Furniture) to store packed boxes.');
+      return;
+    }
+    shelf.packed.push(b.color);
+    rebuildDecor(shelf);
     b.count = 0;
+    b.packed = (b.packed || 0) + 1;
     refreshBox(b);
-    const shelf = state.shelves.find(s => s.packed.length < SHELF_CAP);
-    if (shelf) { shelf.packed.push(b.color); buildShelf(shelf); }
-    earn(bonus, true);
     blip(520, 0.12, 'square', 0.04); setTimeout(() => blip(780, 0.15, 'square', 0.04), 90);
-    toast(shelf ? `Packed a box of ${SHADES[b.color].name}! It's up on the shelf.` : 'Box packed! Buy another shelf to display it and earn coins over time.');
+    toast(`Packed a box of ${SHADES[b.color].name} onto a shelf.`);
+    save();
   }
 
-  // ---------------------------------------------------------------------------
-  // Shelves on the back wall
-  // ---------------------------------------------------------------------------
-  const shelfGroups = new Map();
   const plankMat = new T.MeshStandardMaterial({ color: 0xa8703f, roughness: 0.7 });
-  function buildShelf(s) {
-    let g = shelfGroups.get(s);
-    if (g) scene.remove(g);
-    g = new T.Group();
-    const plank = new T.Mesh(new T.BoxGeometry(3.0, 0.08, 0.55), plankMat);
-    plank.position.set(0, 1.6, 0.28);
-    plank.castShadow = true; plank.receiveShadow = true;
-    g.add(plank);
-    for (const bx of [-1.2, 1.2]) {
-      const br = new T.Mesh(new T.BoxGeometry(0.06, 0.3, 0.45), plankMat);
-      br.position.set(bx, 1.42, 0.24);
-      g.add(br);
-    }
-    s.packed.forEach((c, i) => {
-      const pb = new T.Group();
-      const box = new T.Mesh(new T.BoxGeometry(0.5, 0.42, 0.42), new T.MeshStandardMaterial({ color: cardboard, roughness: 0.9 }));
-      box.castShadow = true;
-      pb.add(box);
-      pb.add(new T.Mesh(new T.BoxGeometry(0.1, 0.425, 0.425), new T.MeshStandardMaterial({ color: 0xe9d7b5, roughness: 0.4 })));
-      const label = new T.Mesh(new T.PlaneGeometry(0.32, 0.16), new T.MeshStandardMaterial({ color: SHADES[c].hex, roughness: 0.6 }));
-      label.position.set(0, 0, 0.212);
-      pb.add(label);
-      pb.position.set(-1.16 + i * 0.58, 1.85, 0.28);
-      g.add(pb);
-    });
-    g.position.set(SHELF_SLOTS[s.slot], 0, -HALF);
-    scene.add(g);
-    shelfGroups.set(s, g);
-  }
-  function shelfIncome() {
-    let v = 0;
-    state.shelves.forEach(s => s.packed.forEach(c => { v += SHADES[c].value * 0.15; }));
-    return v * coinMult();
-  }
 
   // ---------------------------------------------------------------------------
   // Decorations
@@ -663,6 +632,23 @@
     const g = new T.Group();
     let update = null;
     switch (d.type) {
+      case 'shelf': {
+        if (!d.packed) d.packed = [];
+        const wood = plankMat;
+        for (const y of [0.05, 0.75, 1.45, 2.1]) g.add(mesh(new T.BoxGeometry(2.1, 0.06, 0.55), wood, 0, y, 0));
+        for (const x of [-1.03, 1.03]) g.add(mesh(new T.BoxGeometry(0.06, 2.15, 0.55), wood, x, 1.07, 0));
+        g.add(mesh(new T.BoxGeometry(2.1, 2.15, 0.03), std(0x8a5a35), 0, 1.07, -0.26));
+        d.packed.forEach((c, i) => {
+          const level = Math.floor(i / 4), slot = i % 4;
+          const pb = new T.Group();
+          pb.add(mesh(new T.BoxGeometry(0.44, 0.5, 0.44), std(cardboard, { roughness: 0.9 })));
+          pb.add(mesh(new T.BoxGeometry(0.08, 0.505, 0.445), std(0xe9d7b5, { roughness: 0.4 }), 0, 0, 0, false));
+          pb.add(mesh(new T.PlaneGeometry(0.3, 0.16), std(SHADES[c].hex, { roughness: 0.6 }), 0, 0.05, 0.222, false));
+          pb.position.set(-0.75 + slot * 0.5, 0.33 + level * 0.7, 0);
+          g.add(pb);
+        });
+        break;
+      }
       case 'plant': {
         g.add(mesh(new T.CylinderGeometry(0.26, 0.19, 0.42, 16), std(0xd16d3c), 0, 0.21, 0));
         g.add(mesh(new T.CylinderGeometry(0.27, 0.27, 0.06, 16), std(0xb4582c), 0, 0.42, 0));
@@ -826,6 +812,10 @@
     d.group.position.set(d.x, d.y || 0, d.z);
     d.group.rotation.y = d.ry || 0;
   }
+  function rebuildDecor(d) {
+    scene.remove(d.group);
+    buildDecor(d);
+  }
 
   // ---------------------------------------------------------------------------
   // Player
@@ -844,7 +834,7 @@
     fx += joy.x; fz += -joy.y;
     const len = Math.hypot(fx, fz);
     if (len > 0.01) {
-      const sp = walkSpeed(state.upgrades.speed) * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1.7 : 1) * Math.min(1, len) / len;
+      const sp = walkSpeed(lvl('speed')) * (keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1.7 : 1) * Math.min(1, len) / len;
       const sy = Math.sin(player.yaw), cy = Math.cos(player.yaw);
       player.x += (fx * cy - fz * sy) * sp * dt;
       player.z += (-fx * sy - fz * cy) * sp * dt;
@@ -862,7 +852,7 @@
       }
     }
     // wade up onto piles a little
-    const target = 1.65 + Math.min(1.2, topAt(player.x, player.z, 0.35)) * 0.85;
+    const target = 1.65 + Math.min(2.6, topAt(player.x, player.z, 0.35)) * 0.9;
     player.eye += (target - player.eye) * Math.min(1, dt * 6);
     camera.position.set(player.x, player.eye, player.z);
     camera.rotation.set(player.pitch, player.yaw, 0);
@@ -1027,12 +1017,12 @@
   }
 
   function pickUp(first) {
-    const n = handSize(state.upgrades.hand);
+    const n = handSize(lvl('hand'));
     if (hand.n && hand.c !== first.c) return;
     const space = n - hand.n;
     if (space <= 0) { toast(`Your hands are full (${n}). Toss them into a box!`); return; }
     const picked = [first];
-    const r = scoop(state.upgrades.reach);
+    const r = scoop(lvl('reach'));
     if (space > 1) {
       const cands = [];
       forNear(first.x, first.z, r, o => {
@@ -1071,11 +1061,10 @@
       startFlight(c, handWorld, to, i * 0.05, () => {
         if (b.color === c && b.count < capacity() && state.boxes.includes(b)) {
           b.count++;
-          state.sorted++;
-          earn(SHADES[c].value * coinMult(), true);
+          recordSort(c, true);
           refreshBox(b);
           blip(620 + Math.random() * 200, 0.06, 'sine', 0.05);
-          if (b.count >= capacity() && state.upgrades.autoPack) setTimeout(() => packBox(b), 400);
+          if (b.count >= capacity() && lvl('autoPack')) setTimeout(() => packBox(b), 400);
         } else {
           // bounce off onto the floor next to the box
           const a = Math.random() * TAU;
@@ -1145,7 +1134,7 @@
     return { g, carry };
   }
   function syncBots() {
-    while (bots.length < state.upgrades.bots) {
+    while (bots.length < lvl('bots')) {
       const { g, carry } = buildBot();
       bots.push({ g, carryMesh: carry, x: rand(-6, 6), z: rand(-6, 6), y: 0, state: 'idle', target: null, box: null, carry: [], wait: rand(0, 1), bob: Math.random() * 6 });
     }
@@ -1163,7 +1152,7 @@
   }
 
   function updateBot(bot, dt) {
-    const speed = 1.6 + state.upgrades.botSpeed * 0.6;
+    const speed = 1.6 + lvl('botSpeed') * 0.6;
     bot.bob += dt * 8;
     const moveTo = (tx, tz) => {
       const dx = tx - bot.x, dz = tz - bot.z;
@@ -1193,7 +1182,7 @@
         const box = boxWithSpace(t.c, t.x, t.z);
         if (!box) { t.claimed = false; bot.state = 'idle'; }
         else {
-          const want = Math.min(botCarry(state.upgrades.botSpeed), capacity() - box.count - box.incoming);
+          const want = Math.min(botCarry(lvl('botSpeed')), capacity() - box.count - box.incoming);
           const grab = [t];
           forNear(t.x, t.z, 0.5, o => {
             if (grab.length < want && o !== t && o.c === t.c && !o.claimed && o.delay <= 0) grab.push(o);
@@ -1220,12 +1209,12 @@
           box.incoming = Math.max(0, box.incoming - bot.carry.length);
           for (const c of bot.carry) {
             if (box.color === c && box.count < capacity()) {
-              box.count++; state.sorted++;
-              earn(SHADES[c].value * coinMult(), false);
+              box.count++;
+              recordSort(c, false);
             } else addCrayon(bot.x, bot.z, c);
           }
           refreshBox(box);
-          if (box.count >= capacity() && state.upgrades.autoPack) setTimeout(() => packBox(box), 400);
+          if (box.count >= capacity() && lvl('autoPack')) setTimeout(() => packBox(box), 400);
           bot.carry = []; bot.box = null; bot.state = 'idle'; bot.wait = 0.3;
           bot.carryMesh.visible = false;
         }
@@ -1296,13 +1285,19 @@
   }
 
   function putAway() {
-    if (!placing || placing.kind !== 'decor') return;
-    const d = placing.obj;
-    scene.remove(d.group);
-    state.decor = state.decor.filter(x => x !== d);
-    const refund = Math.floor(DECOR[d.type].price / 2);
-    state.coins += refund;
-    toast(`Put away the ${DECOR[d.type].name} (+🪙${refund}).`);
+    if (!placing) return;
+    const o = placing.obj;
+    if (placing.kind === 'box') {
+      if (o.count > 0) { toast('Only empty boxes can be put away. Pack it first.'); return; }
+      scene.remove(o.group);
+      state.boxes = state.boxes.filter(x => x !== o);
+      toast(`Put away the ${SHADES[o.color].name} box.`);
+    } else {
+      if (o.type === 'shelf' && o.packed.length) { toast('Only empty shelves can be put away.'); return; }
+      scene.remove(o.group);
+      state.decor = state.decor.filter(x => x !== o);
+      toast(`Put away the ${DECOR[o.type].name}.`);
+    }
     placing = null;
     save();
   }
@@ -1338,20 +1333,59 @@
   }
 
   let floatAcc = 0, floatT = 0;
-  function earn(amount, show) {
-    state.coins += amount;
-    if (show) floatAcc += amount;
+  // A crayon landed in the right box: count it and check for unlocks
+  function recordSort(c, show) {
+    const fi = SHADES[c].family;
+    state.sorted++;
+    state.familySorted[fi]++;
+    if (show) floatAcc++;
+    const n = state.familySorted[fi];
+    const ti = TIERS.indexOf(n);
+    if (ti >= 0) {
+      const r = REWARDS[fi][ti];
+      recomputeUnlocks();
+      if (r.up === 'bots') syncBots();
+      state.boxes.forEach(refreshBox);
+      celebrate(`${rewardIcon(r)} Unlocked: ${rewardName(r)}!`, r.up ? UPGRADES[r.up].info(lvl(r.up)) : 'Find it under E → Furniture and place it anywhere.');
+    }
+    if (!state.done && cr.length === 0 && hand.n === 0 && flights.length <= 1 && bots.every(b => !b.carry.length)) {
+      state.done = true;
+      celebrate('🎉 Every single crayon is sorted!', `All ${state.sorted.toLocaleString()} of them. The room is finally clean.`);
+    }
+  }
+  function celebrate(title, sub) {
+    const el = $('unlock');
+    el.querySelector('b').textContent = title;
+    el.querySelector('span').textContent = sub;
+    el.hidden = false;
+    el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop');
+    clearTimeout(celebrate.t);
+    celebrate.t = setTimeout(() => { el.hidden = true; }, 4200);
+    [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => blip(f, 0.18, 'triangle', 0.06), i * 110));
   }
   function flushFloaters(dt) {
     floatT -= dt;
     if (floatAcc > 0 && floatT <= 0) {
       const d = document.createElement('div');
-      d.textContent = '+' + (floatAcc < 10 ? floatAcc.toFixed(1).replace(/\.0$/, '') : fmt(floatAcc)) + ' 🪙';
+      d.textContent = '+' + floatAcc + ' sorted';
       $('floaters').appendChild(d);
       setTimeout(() => d.remove(), 1100);
       floatAcc = 0;
-      floatT = 0.12;
+      floatT = 0.15;
     }
+  }
+
+  // The next few rewards, for the HUD
+  function nextReward() {
+    let best = null;
+    REWARDS.forEach((tiers, fi) => {
+      const n = state.familySorted[fi];
+      const ti = TIERS.findIndex(t => n < t);
+      if (ti < 0) return;
+      const need = TIERS[ti] - n;
+      if (!best || need < best.need) best = { need, fi, r: tiers[ti] };
+    });
+    return best;
   }
 
   // ---------------------------------------------------------------------------
@@ -1362,8 +1396,8 @@
   const GLOW_TO = new T.Color(1, 1, 0.75);
   function updateGlow(time) {
     let glow = -1;
-    if (hand.n && state.upgrades.glow >= 1) glow = hand.c;
-    else if (!hand.n && state.upgrades.glow >= 2 && aim.type === 'crayon') glow = aim.obj.c;
+    if (hand.n && lvl('glow') >= 1) glow = hand.c;
+    else if (!hand.n && lvl('glow') >= 2 && aim.type === 'crayon') glow = aim.obj.c;
     if (glow !== lastGlow && lastGlow >= 0) {
       for (const o of cr) if (o.c === lastGlow) writeColor(o);
     }
@@ -1392,14 +1426,14 @@
       const o = placing.obj;
       const name = placing.kind === 'box' ? `${SHADES[o.color].name} box` : DECOR[o.type].name;
       const canRotate = placing.kind === 'box' || !DECOR[o.type].wall;
-      html = `Placing <b>${name}</b> <span class="dim">· click to place${canRotate ? ' · R rotate' : ''}${placing.kind === 'decor' ? ' · X put away' : ''}${placing.isNew ? '' : ' · Esc cancel'}</span>`;
+      html = `Placing <b>${name}</b> <span class="dim">· click to place${canRotate ? ' · R rotate' : ''}${' · X put away'}${placing.isNew ? '' : ' · Esc cancel'}</span>`;
     } else if (aim.type === 'crayon') {
       const s = SHADES[aim.obj.c];
       html = `${sw(s.hex)}<b>${s.name}</b> <span class="dim">· click to ${hand.n ? 'grab more' : 'pick up'}</span>`;
     } else if (aim.type === 'box') {
       const b = aim.obj, s = SHADES[b.color];
       const full = b.count >= capacity();
-      const what = hand.n ? 'click to toss' : full && !state.upgrades.autoPack ? 'click to pack' : 'G move' + (b.count === 0 ? ' · C change shade' : '');
+      const what = hand.n ? 'click to toss' : full && !lvl('autoPack') ? 'click to pack' : 'G move' + (b.count === 0 ? ' · C change shade' : '');
       html = `${sw(s.hex)}<b>${s.name}</b> box ${b.count}/${capacity()} <span class="dim">· ${what}</span>`;
     } else if (aim.type === 'decor') {
       html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
@@ -1426,21 +1460,22 @@
     }
     if (hh !== lastHandHTML) { handLabel.innerHTML = hh; lastHandHTML = hh; }
     handLabel.hidden = !hh;
-    hint.textContent = locked ? 'WASD walk · Shift run · E shop · G move furniture · Esc free the mouse'
-      : 'WASD walk · drag to look · click to act · E shop · L lock mouse';
+    hint.textContent = locked ? 'WASD walk · Shift run · E build · F collection · G move · Esc free the mouse'
+      : 'WASD walk · drag to look · click to act · E build · F collection · L lock mouse';
   }
 
   function updateHud() {
-    $('coins').textContent = '🪙 ' + fmt(state.coins);
-    $('shopCoins').textContent = '🪙 ' + fmt(state.coins);
-    const inc = shelfIncome();
-    $('income').textContent = `Shelves +${inc < 10 ? inc.toFixed(1) : fmt(inc)}/s`;
-    $('cozy').textContent = `Cozy +${cozyPct()}%`;
-    $('floorCount').textContent = `${cr.length.toLocaleString()} crayons to sort`;
-    $('delivery').textContent = cr.length >= maxFloor() - 50 ? 'Room is full!' : `Next pile in ${Math.max(0, Math.ceil(state.deliveryT))}s`;
-    $('btnDeliver').disabled = cr.length > 400;
+    const pct = state.sorted / TOTAL * 100;
+    $('progressText').textContent = `${state.sorted.toLocaleString()} / ${TOTAL.toLocaleString()} sorted`;
+    $('progressPct').textContent = pct < 10 ? pct.toFixed(2) + '%' : pct.toFixed(1) + '%';
+    $('progressFill').style.width = Math.min(100, pct) + '%';
+    $('floorCount').textContent = `${cr.length.toLocaleString()} still on the floor`;
+    const nr = nextReward();
+    $('nextReward').innerHTML = nr
+      ? `Next: ${rewardIcon(nr.r)} <b>${rewardName(nr.r)}</b> in ${nr.need} more ${FAMILIES[nr.fi].name}`
+      : 'Everything unlocked!';
     $('btnLock').classList.toggle('active', locked);
-    if (!$('shop').hidden) refreshShopButtons();
+    if (!$('shop').hidden && shopTab === 'collection') renderShop();
   }
 
   // ---------------------------------------------------------------------------
@@ -1469,7 +1504,7 @@
       return;
     }
     if (aim.type === 'crayon') pickUp(aim.obj);
-    else if (aim.type === 'box' && aim.obj.count >= capacity() && !state.upgrades.autoPack) packBox(aim.obj);
+    else if (aim.type === 'box' && aim.obj.count >= capacity() && !lvl('autoPack')) packBox(aim.obj);
   }
 
   function setMouse(e) {
@@ -1527,6 +1562,7 @@
     if (anyModal()) return;
     keys.add(e.code);
     if (e.code === 'KeyE' || e.code === 'Tab') { e.preventDefault(); openShop(); }
+    else if (e.code === 'KeyF') openShop('collection');
     else if (e.code === 'KeyL') { if (!locked) requestLock(); }
     else if (e.code === 'KeyQ' && hand.n) dropAt(new T.Vector3(player.x - Math.sin(player.yaw) * 0.8, 0, player.z - Math.cos(player.yaw) * 0.8));
     else if (e.code === 'KeyR' && placing) {
@@ -1572,143 +1608,128 @@
   joyEl.addEventListener('pointercancel', joyEnd);
 
   // ---------------------------------------------------------------------------
-  // Shop
+  // Build menu: boxes, furniture, and the collection of unlocks
   // ---------------------------------------------------------------------------
-  let shopTab = 'storage';
-  let shopButtons = [];
+  let shopTab = 'boxes';
 
   function closeModals() { document.querySelectorAll('.modal').forEach(m => { m.hidden = true; }); }
-  function openShop() {
+  function openShop(tab) {
     if (locked) document.exitPointerLock();
     keys.clear();
+    if (tab) shopTab = tab;
     $('shop').hidden = false;
     renderShop();
-    updateHud();
   }
 
-  function shopItems() {
-    const items = [];
-    if (shopTab === 'storage') {
-      const covered = new Set(state.boxes.map(b => b.color)).size;
-      items.push({
-        icon: '📦', name: 'Sorting Box', price: boxCost(), level: `${covered}/30 shades`,
-        desc: `Holds ${capacity()} crayons of one shade. Pick the shade, then place it in the room.`,
-        buy: () => openPicker(null), custom: true,
-      });
-      items.push({
-        icon: '🪵', name: 'Shelf', price: shelfCost(), soldOut: state.shelves.length >= SHELF_SLOTS.length,
-        level: `${state.shelves.length}/${SHELF_SLOTS.length}`,
-        desc: `Hangs on the back wall and holds ${SHELF_CAP} packed boxes. Every packed box on a shelf earns coins over time.`,
-        buy: () => {
-          const used = new Set(state.shelves.map(s => s.slot));
-          const slot = [2, 3, 1, 4, 0, 5].find(s => !used.has(s));
-          const s = { slot, packed: [] };
-          state.shelves.push(s);
-          buildShelf(s);
-          toast('New shelf hung on the back wall!');
-        },
-      });
-    } else if (shopTab === 'upgrades') {
-      UPGRADES.forEach(u => {
-        const l = state.upgrades[u.id];
-        items.push({
-          icon: u.icon, name: u.name, price: upgradeCost(u), soldOut: l >= u.max,
-          level: u.max > 1 ? `Lv ${l}/${u.max}` : (l ? 'Owned' : ''),
-          desc: l >= u.max ? 'Maxed out!' : u.desc(l),
-          buy: () => {
-            state.upgrades[u.id]++;
-            if (u.id === 'bots') { syncBots(); toast('Sortbot activated! Beep boop.'); }
-            if (u.id === 'bigBox' || u.id === 'autoPack') state.boxes.forEach(refreshBox);
-            if (u.id === 'autoPack') state.boxes.forEach(b => { if (b.count >= capacity()) packBox(b); });
-          },
-        });
-      });
-    } else if (shopTab === 'decor') {
-      Object.entries(DECOR).forEach(([type, def]) => {
-        const n = state.decor.filter(d => d.type === type).length;
-        items.push({
-          icon: def.icon, name: def.name, price: def.price, level: n ? `${n} owned` : '',
-          desc: `+${def.cozy}% cozy (boosts all coins). ${def.wall ? 'Hangs on a wall.' : 'Sits on the floor.'}`,
-          buy: () => {
-            const d = { type, x: player.x - Math.sin(player.yaw) * 2.5, y: def.wall ? 2.2 : 0, z: player.z - Math.cos(player.yaw) * 2.5, ry: 0 };
-            state.decor.push(d);
-            buildDecor(d);
-            closeModals();
-            startPlacing('decor', d, true);
-            toast(def.wall ? 'Look at a wall and click to hang it.' : 'Look where you want it and click to place it.');
-          },
-        });
-      });
-    }
-    return items;
+  function placeAhead() {
+    return [player.x - Math.sin(player.yaw) * 2.5, player.z - Math.cos(player.yaw) * 2.5];
   }
 
   function renderShop() {
     document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === shopTab));
     const list = $('shopList');
+    const scroll = list.scrollTop;
     list.innerHTML = '';
-    shopButtons = [];
-    shopItems().forEach(it => {
-      const el = document.createElement('div');
-      el.className = 'item';
-      el.innerHTML = `<h3><span>${it.icon}</span>${it.name}<span class="lvl">${it.level || ''}</span></h3><p>${it.desc}</p>`;
-      const btn = document.createElement('button');
-      btn.className = 'primary';
-      if (it.soldOut) { btn.textContent = 'Maxed'; btn.disabled = true; btn.className = ''; }
-      else btn.textContent = `Buy · 🪙 ${fmt(it.price)}`;
-      btn.onclick = () => {
-        if (it.soldOut || state.coins < it.price) return;
-        if (it.custom) { it.buy(); return; }
-        state.coins -= it.price;
-        it.buy();
-        blip(880, 0.1, 'triangle', 0.06);
-        save();
-        if (!$('shop').hidden) renderShop();
-        updateHud();
-      };
-      el.appendChild(btn);
-      list.appendChild(el);
-      shopButtons.push({ btn, it });
-    });
-    refreshShopButtons();
+    list.className = 'shop-list ' + shopTab;
+    if (shopTab === 'boxes') {
+      const counts = new Array(SHADES.length).fill(0);
+      cr.forEach(o => { counts[o.c]++; });
+      const intro = document.createElement('p');
+      intro.className = 'tab-intro';
+      intro.textContent = 'Boxes are free. Grab one for any shade and put it wherever makes sense to you. Make as many as you like.';
+      list.appendChild(intro);
+      FAMILIES.forEach((f, fi) => {
+        const row = document.createElement('div');
+        row.className = 'shade-row';
+        row.innerHTML = `<h4>${f.name}</h4>`;
+        f.shades.forEach((_, si) => {
+          const i = fi * 3 + si, s = SHADES[i];
+          const nb = state.boxes.filter(b => b.color === i).length;
+          const btn = document.createElement('button');
+          btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}<small>${counts[i].toLocaleString()} on the floor · ${nb ? nb + ' box' + (nb > 1 ? 'es' : '') : 'no box yet'}</small></span>`;
+          btn.onclick = () => {
+            const [x, z] = placeAhead();
+            const b = addBox(x, z, i);
+            closeModals();
+            startPlacing('box', b, true);
+            blip(700, 0.08, 'triangle', 0.05);
+          };
+          row.appendChild(btn);
+        });
+        list.appendChild(row);
+      });
+    } else if (shopTab === 'furniture') {
+      Object.entries(DECOR).forEach(([type, def]) => {
+        const open = unlockedDecor.has(type);
+        const el = document.createElement('div');
+        el.className = 'item' + (open ? '' : ' locked');
+        let how = '';
+        if (!open) {
+          REWARDS.forEach((tiers, fi) => tiers.forEach((r, ti) => {
+            if (r.decor === type) how = `Sort ${TIERS[ti]} ${FAMILIES[fi].name} to unlock (${Math.min(state.familySorted[fi], TIERS[ti])}/${TIERS[ti]})`;
+          }));
+        }
+        const n = state.decor.filter(d => d.type === type).length;
+        el.innerHTML = `<h3><span>${open ? def.icon : '🔒'}</span>${def.name}<span class="lvl">${n ? n + ' placed' : ''}</span></h3><p>${open ? (def.desc || (def.wall ? 'Hangs on a wall.' : 'Sits on the floor.')) : how}</p>`;
+        const btn = document.createElement('button');
+        btn.className = open ? 'primary' : '';
+        btn.disabled = !open;
+        btn.textContent = open ? 'Place one' : 'Locked';
+        btn.onclick = () => {
+          if (!open) return;
+          const [x, z] = placeAhead();
+          const d = { type, x, y: def.wall ? 2.2 : 0, z, ry: 0 };
+          state.decor.push(d);
+          buildDecor(d);
+          closeModals();
+          startPlacing('decor', d, true);
+          toast(def.wall ? 'Look at a wall and click to hang it.' : 'Look where you want it and click to place it.');
+        };
+        el.appendChild(btn);
+        list.appendChild(el);
+      });
+    } else {
+      // Collection: progress per color family and what it unlocks
+      const ups = document.createElement('div');
+      ups.className = 'ups';
+      ups.innerHTML = '<h4>Your upgrades</h4>' + Object.entries(UPGRADES).map(([id, u]) => {
+        const l = lvl(id);
+        return `<div class="up${l ? '' : ' off'}">${u.icon} <b>${u.name}</b>${l > 1 && !['autoPack', 'botSpeed'].includes(id) ? ' ×' + l : ''}<small>${l ? u.info(l) : 'Not unlocked yet'}</small></div>`;
+      }).join('');
+      list.appendChild(ups);
+      FAMILIES.forEach((f, fi) => {
+        const n = state.familySorted[fi];
+        const el = document.createElement('div');
+        el.className = 'fam';
+        const swatches = f.shades.map(s => `<span class="sw" style="background:${s[1]}"></span>`).join('');
+        const tiers = REWARDS[fi].map((r, ti) => {
+          const got = n >= TIERS[ti];
+          return `<li class="${got ? 'got' : ''}"><span class="tier">${TIERS[ti]}</span>${rewardIcon(r)} ${rewardName(r)}${got ? ' ✓' : ''}</li>`;
+        }).join('');
+        const max = TIERS[TIERS.length - 1];
+        el.innerHTML = `<h3>${swatches}${f.name}<span class="lvl">${n.toLocaleString()} sorted</span></h3>
+          <div class="bar"><div style="width:${Math.min(100, n / max * 100)}%"></div></div><ul>${tiers}</ul>`;
+        list.appendChild(el);
+      });
+    }
+    list.scrollTop = scroll;
   }
 
-  function refreshShopButtons() {
-    shopButtons.forEach(({ btn, it }) => { if (!it.soldOut) btn.disabled = state.coins < it.price; });
-  }
-
-  $('btnShop').onclick = openShop;
-  document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { shopTab = b.dataset.tab; renderShop(); }; });
+  $('btnShop').onclick = () => openShop();
+  document.querySelectorAll('.tabs button').forEach(b => { b.onclick = () => { shopTab = b.dataset.tab; $('shopList').scrollTop = 0; renderShop(); }; });
   document.querySelectorAll('[data-close]').forEach(b => { b.onclick = () => { $(b.dataset.close).hidden = true; }; });
   document.querySelectorAll('.modal').forEach(m => m.addEventListener('pointerdown', e => { if (e.target === m) m.hidden = true; }));
 
-  // Shade picker for a new box (box = null) or recoloring an empty one
+  // Shade picker for changing an empty box's shade
   function openPicker(box) {
     if (locked) document.exitPointerLock();
-    $('pickerTitle').textContent = box ? 'Change this box to which shade?' : `New box (🪙 ${fmt(boxCost())}): which shade?`;
+    $('pickerTitle').textContent = 'Change this box to which shade?';
     const list = $('pickerList');
     list.innerHTML = '';
-    const counts = new Array(SHADES.length).fill(0);
-    cr.forEach(o => { counts[o.c]++; });
-    const hasBox = i => state.boxes.some(b => b.color === i);
-    SHADES.map((s, i) => i).sort((a, b) => (hasBox(a) - hasBox(b)) || a - b).forEach(i => {
-      const s = SHADES[i];
-      const nb = state.boxes.filter(b => b.color === i).length;
+    SHADES.forEach((s, i) => {
       const btn = document.createElement('button');
-      btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}<small>${counts[i]} on the floor · ${nb ? nb + ' box' + (nb > 1 ? 'es' : '') : 'no box yet'}</small></span>`;
-      btn.onclick = () => {
-        if (box) { box.color = i; refreshBox(box); save(); closeModals(); return; }
-        const cost = boxCost();
-        if (state.coins < cost) { toast('Not enough coins!'); return; }
-        state.coins -= cost;
-        state.extraBoxesBought++;
-        const b = addBox(player.x - Math.sin(player.yaw) * 2.5, player.z - Math.cos(player.yaw) * 2.5, i);
-        blip(880, 0.1, 'triangle', 0.06);
-        closeModals();
-        startPlacing('box', b, true);
-        toast(`New ${s.name} box! Look where you want it and click to place it.`);
-        updateHud();
-      };
+      btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}</span>`;
+      btn.onclick = () => { box.color = i; refreshBox(box); save(); closeModals(); };
       list.appendChild(btn);
     });
     $('picker').hidden = false;
@@ -1717,16 +1738,12 @@
   // ---------------------------------------------------------------------------
   // Other buttons
   // ---------------------------------------------------------------------------
-  $('btnDeliver').onclick = () => {
-    if (cr.length > 400) return;
-    if (deliverPile()) state.deliveryT = deliveryInterval(state.upgrades.delivery);
-  };
+  $('btnCollection').onclick = () => openShop('collection');
   $('btnSound').onclick = () => { muted = !muted; $('btnSound').textContent = muted ? '🔇' : '🔊'; };
   $('btnHelp').onclick = () => { if (locked) document.exitPointerLock(); $('help').hidden = false; };
   $('btnLock').onclick = () => { if (locked) document.exitPointerLock(); else requestLock(); };
   $('btnStart').onclick = () => {
     $('help').hidden = true;
-    state.seenHelp = true;
     if (!isTouch) requestLock();
   };
   let resetArmed = 0;
@@ -1744,7 +1761,7 @@
     clearWorld();
     newGame();
     save();
-    toast('Fresh room, fresh mess.');
+    toast('Fresh room, fresh mountain of crayons.');
   };
 
   // ---------------------------------------------------------------------------
@@ -1752,25 +1769,24 @@
   // ---------------------------------------------------------------------------
   function save() {
     try {
-      const flat = [];
+      const flat = new Array(cr.length * 7);
       const r3 = v => Math.round(v * 1000) / 1000;
-      for (const o of cr) flat.push(r3(o.x), r3(o.y), r3(o.z), r3(o.ax), r3(o.ay), r3(o.az), o.c);
+      let k = 0;
+      for (const o of cr) { flat[k++] = r3(o.x); flat[k++] = r3(o.y); flat[k++] = r3(o.z); flat[k++] = r3(o.ax); flat[k++] = r3(o.ay); flat[k++] = r3(o.az); flat[k++] = o.c; }
       // crayons in your hands, in the air or on a bot go back to the floor in the save
       const loose = [];
       for (let i = 0; i < hand.n; i++) loose.push(hand.c);
       flights.forEach(f => loose.push(f.c));
       bots.forEach(b => b.carry.forEach(c => loose.push(c)));
       const s = {
-        coins: state.coins, sorted: state.sorted, deliveryT: state.deliveryT, extraBoxesBought: state.extraBoxesBought,
-        upgrades: state.upgrades, seenHelp: state.seenHelp,
-        shelves: state.shelves,
-        boxes: state.boxes.map(({ x, z, rot, color, count }) => ({ x, z, rot, color, count })),
-        decor: state.decor.map(({ type, x, y, z, ry }) => ({ type, x, y, z, ry })),
+        sorted: state.sorted, familySorted: state.familySorted, done: state.done,
+        boxes: state.boxes.map(({ x, z, rot, color, count, packed }) => ({ x, z, rot, color, count, packed })),
+        decor: state.decor.map(({ type, x, y, z, ry, packed }) => ({ type, x, y, z, ry, packed })),
         player: { x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch },
         crayons: flat, loose,
       };
       localStorage.setItem(SAVE_KEY, JSON.stringify(s));
-    } catch (e) { /* storage may be unavailable */ }
+    } catch (e) { /* storage may be unavailable or full */ }
   }
 
   function clearWorld() {
@@ -1778,8 +1794,6 @@
       state.boxes.forEach(b => scene.remove(b.group));
       state.decor.forEach(d => scene.remove(d.group));
     }
-    shelfGroups.forEach(g => scene.remove(g));
-    shelfGroups.clear();
     bots.forEach(b => scene.remove(b.g));
     bots.length = 0;
     flights.forEach(f => scene.remove(f.m));
@@ -1796,16 +1810,24 @@
 
   function newGame() {
     state = freshState();
+    recomputeUnlocks();
     Object.assign(player, state.player);
-    START_BOXES.forEach((c, i) => addBox(-5 + i * 2, 7, c));
-    state.shelves.forEach(buildShelf);
-    // Crayons absolutely everywhere, plus some huge heaps. Every crayon is a random shade.
-    spawnCarpet(1800);
-    spawnPile(-6, -5, 1300);
-    spawnPile(5, -6, 1300);
-    spawnPile(-1, 0, 1100);
-    spawnPile(7, 3, 900);
-    spawnPile(-8, 4, 700);
+    START_BOXES.forEach((c, i) => addBox(-5 + i * 2, 8.2, c));
+    [-4, 4].forEach(x => {
+      const d = { type: 'shelf', x, y: 0, z: 11.4, ry: Math.PI, packed: [] };
+      state.decor.push(d);
+      buildDecor(d);
+    });
+    // An absurd amount of crayons. A layer over the whole floor, then mountains on top.
+    // Every crayon is a random shade, so there's no pre-sorting anywhere.
+    spawnCarpet(3500);
+    const heaps = [[-6, -5, 4200], [5.5, -6, 3800], [-1, -0.5, 3300], [7, 3.5, 2400], [-8, 4, 1800], [1.5, 5, 1000]];
+    let left = TOTAL - cr.length;
+    heaps.forEach(([x, z, n], i) => {
+      const k = i === heaps.length - 1 ? left : Math.min(n, left);
+      left -= spawnPile(x, z, k);
+    });
+    while (cr.length < TOTAL) spawnCarpet(TOTAL - cr.length);
   }
 
   function load() {
@@ -1815,28 +1837,31 @@
         const s = JSON.parse(raw);
         state = freshState();
         Object.assign(state, {
-          coins: s.coins || 0, sorted: s.sorted || 0, deliveryT: s.deliveryT ?? state.deliveryT,
-          extraBoxesBought: s.extraBoxesBought || 0, seenHelp: !!s.seenHelp,
-          upgrades: Object.assign(state.upgrades, s.upgrades || {}),
-          shelves: s.shelves && s.shelves.length ? s.shelves : state.shelves,
+          sorted: s.sorted || 0, done: !!s.done,
+          familySorted: FAMILIES.map((_, i) => (s.familySorted && s.familySorted[i]) || 0),
           player: s.player || state.player,
         });
+        recomputeUnlocks();
         Object.assign(player, state.player);
-        (s.boxes || []).forEach(b => addBox(b.x, b.z, b.color, b.rot || 0, b.count || 0));
-        (s.decor || []).forEach(d => { const o = { type: d.type, x: d.x, y: d.y || 0, z: d.z, ry: d.ry || 0 }; state.decor.push(o); buildDecor(o); });
-        state.shelves.forEach(buildShelf);
+        (s.boxes || []).forEach(b => { const o = addBox(b.x, b.z, b.color, b.rot || 0, b.count || 0); o.packed = b.packed || 0; });
+        (s.decor || []).forEach(d => {
+          const o = { type: d.type, x: d.x, y: d.y || 0, z: d.z, ry: d.ry || 0, packed: d.packed || [] };
+          state.decor.push(o);
+          buildDecor(o);
+        });
         const f = s.crayons || [];
         for (let i = 0; i + 6 < f.length && cr.length < MAX_CRAYONS; i += 7) {
           pushCrayon({ x: f[i], y: f[i + 1], z: f[i + 2], ax: f[i + 3], ay: f[i + 4], az: f[i + 5], c: f[i + 6], dy: 0, vy: 0, delay: 0 });
         }
         (s.loose || []).forEach(c => addCrayon(player.x + rand(-1, 1), player.z + rand(-1, 1), c));
         syncBots();
-        return;
+        return true;
       }
     } catch (e) {
       clearWorld();
     }
     newGame();
+    return false;
   }
 
   // ---------------------------------------------------------------------------
@@ -1874,12 +1899,6 @@
     updateGlow(time);
     state.decor.forEach(d => d.update && d.update(time));
 
-    state.coins += shelfIncome() * dt;
-    state.deliveryT -= dt;
-    if (state.deliveryT <= 0) {
-      state.deliveryT = deliveryInterval(state.upgrades.delivery);
-      if (cr.length < maxFloor() - 50) deliverPile();
-    }
 
     if (matDirty) { crayonMesh.instanceMatrix.needsUpdate = true; matDirty = false; }
     if (colDirty) { crayonMesh.instanceColor.needsUpdate = true; colDirty = false; }
@@ -1889,7 +1908,7 @@
     flushFloaters(dt);
 
     saveT += dt;
-    if (saveT > 6) { saveT = 0; save(); }
+    if (saveT > 15) { saveT = 0; save(); }
     hudT += dt;
     if (hudT > 0.2) { hudT = 0; updateHud(); }
     requestAnimationFrame(frame);
@@ -1902,12 +1921,17 @@
   window.addEventListener('beforeunload', save);
   document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
 
-  load();
   resize();
-  refreshHand();
-  updateHud();
-  $('help').hidden = false;
-  requestAnimationFrame(frame);
+  // Give the loading screen a moment to paint before building 20,000 crayons
+  setTimeout(() => {
+    load();
+    refreshHand();
+    updateHud();
+    $('loading').hidden = true;
+    $('help').hidden = false;
+    last = performance.now();
+    requestAnimationFrame(frame);
+  }, 60);
 
   // Exposed for debugging in the console
   window.craySorting = {

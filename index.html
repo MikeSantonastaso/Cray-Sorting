@@ -12,15 +12,16 @@
   <div id="hud">
     <div class="stats">
       <span class="brand">🖍️ Cray Sorting</span>
-      <span id="coins" class="pill big">🪙 0</span>
-      <span id="income" class="pill">Shelves +0/s</span>
-      <span id="cozy" class="pill">Cozy +0%</span>
-      <span id="floorCount" class="pill">0 crayons to sort</span>
-      <span id="delivery" class="pill">Next pile in 45s</span>
+      <div class="progress pill" title="Your progress through the whole room">
+        <div class="ptop"><span id="progressText">0 / 20,000 sorted</span><b id="progressPct">0%</b></div>
+        <div class="pbar"><div id="progressFill"></div></div>
+      </div>
+      <span id="floorCount" class="pill">20,000 still on the floor</span>
+      <span id="nextReward" class="pill"></span>
     </div>
     <div class="buttons">
-      <button id="btnDeliver" title="Dump a new pile now (only when the floor is nearly clean)">📦 New pile</button>
-      <button id="btnShop" class="primary" title="Shop (E)">🛒 Shop <kbd>E</kbd></button>
+      <button id="btnShop" class="primary" title="Boxes and furniture (E)">🧰 Build <kbd>E</kbd></button>
+      <button id="btnCollection" title="Your unlocks (F)">🏅 Collection <kbd>F</kbd></button>
       <button id="btnLock" title="Lock the mouse for first-person look (L)">🎯 Mouse look</button>
       <button id="btnSound" title="Sound on/off">🔊</button>
       <button id="btnHelp" title="How to play">?</button>
@@ -34,18 +35,19 @@
   <div id="floaters"></div>
   <div id="toast"></div>
   <div id="joystick" hidden><div class="knob"></div></div>
+  <div id="unlock" hidden><b></b><span></span></div>
+  <div id="loading">Dumping 20,000 crayons on the floor…</div>
 
   <div id="shop" class="modal" hidden>
     <div class="card wide">
       <div class="card-head">
-        <h2>🛒 Shop</h2>
-        <span id="shopCoins" class="pill big">🪙 0</span>
+        <h2>🧰 Build</h2>
         <button class="close" data-close="shop">✕</button>
       </div>
       <nav class="tabs">
-        <button data-tab="storage" class="active">📦 Boxes &amp; Shelves</button>
-        <button data-tab="upgrades">⚡ Upgrades</button>
-        <button data-tab="decor">🪴 Decorations</button>
+        <button data-tab="boxes" class="active">📦 Boxes</button>
+        <button data-tab="furniture">🪴 Furniture</button>
+        <button data-tab="collection">🏅 Collection</button>
       </nav>
       <div id="shopList" class="shop-list"></div>
     </div>
@@ -68,17 +70,17 @@
         <button class="close" data-close="help">✕</button>
       </div>
       <div class="help-body">
-        <p>You're standing in a room buried under <b>thousands of completely mixed-up crayons</b>: 30 shades across 10 colors, heaped in huge piles. Each shade has its own sorting box, and you start with boxes for only 6 of them.</p>
+        <p>This room is buried under <b>20,000 completely mixed-up crayons</b>: 30 shades across 10 colors, heaped into mountains. Nobody sorted anything. Your job is to sort every last one.</p>
         <div class="keys">
           <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run</div>
           <div><b>Mouse</b> look around (click 🎯 Mouse look, or drag)</div>
-          <div><b>Click</b> a crayon to pick it up</div>
-          <div><b>Click</b> a box to toss your crayons in</div>
-          <div><b>Click</b> the floor to drop them · <kbd>Q</kbd> drop at your feet</div>
-          <div><b>Click</b> a full box to pack it onto a shelf</div>
-          <div><kbd>E</kbd> shop · <kbd>G</kbd> move a box or decoration · <kbd>C</kbd> change an empty box's shade</div>
+          <div><b>Click</b> a crayon to pick it up · <b>click</b> a box to toss it in</div>
+          <div><b>Click</b> the floor to drop crayons · <kbd>Q</kbd> drop at your feet</div>
+          <div><b>Click</b> a full box to pack it onto the nearest shelf</div>
+          <div><kbd>E</kbd> build (free boxes for any shade, shelves, furniture) · <kbd>F</kbd> collection</div>
+          <div><kbd>G</kbd> move what you're looking at · <kbd>R</kbd> rotate · <kbd>X</kbd> put away · <kbd>C</kbd> change an empty box's shade</div>
         </div>
-        <p>Crayons only count in the box for their <b>exact</b> shade. Look at a crayon to see its name. Packed boxes on shelves earn coins over time, and decorations make the room cozier, which boosts every coin. Another pile gets dumped in every so often. Progress saves in this browser.</p>
+        <p>Each crayon only counts in the box for its <b>exact</b> shade. Look at one to see its name. Boxes and shelves are free, so lay the room out however you like. Sorting enough of a color unlocks upgrades and furniture: open the Collection to see what's next. Progress saves in this browser.</p>
         <div class="help-actions">
           <button id="btnStart" class="primary big">Start sorting</button>
           <button id="btnReset" class="danger">Reset all progress</button>

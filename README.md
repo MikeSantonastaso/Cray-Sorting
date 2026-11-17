@@ -1,6 +1,6 @@
 # Cray Sorting
 
-A cozy first-person 3D sorting game. You're standing in a room buried under thousands of completely mixed-up crayons (30 shades across 10 color families) heaped into huge piles. Dig through them, toss each crayon into the box for its exact shade, and earn coins to grow your sorting setup.
+A first-person 3D sorting game. You're standing in a room buried under 20,000 completely mixed-up crayons (30 shades across 10 color families) heaped into mountains. There are no waves and no timers: it's one huge, daunting job. Lay out your boxes and shelves however you like, toss each crayon into the box for its exact shade, and keep going until the floor is clean.
 
 ## How to run
 
@@ -21,17 +21,18 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Toss into a box | Click the box while holding crayons |
 | Drop crayons | Click the floor, or press `Q` |
 | Pack a full box | Click it. Packed boxes go onto your wall shelves |
-| Shop | `E` |
-| Move a box or decoration | Look at it and press `G`, then click to place (`R` rotates, `X` puts decorations away) |
+| Build menu (free boxes, shelves, furniture) | `E` |
+| Collection (unlocks and progress) | `F` |
+| Move a box, shelf or decoration | Look at it and press `G`, then click to place (`R` rotates, `X` puts it away) |
 | Change an empty box's shade | Look at it and press `C` |
 
 On phones and tablets there's an on-screen joystick for walking; drag to look and tap to act.
 
-## Shop
+## Organizing and unlocks
 
-- **Boxes & Shelves**: you start with boxes for only 6 of the 30 shades. Buy boxes for the rest and place them anywhere. Shelves hold packed boxes and earn coins over time.
-- **Upgrades**: Bigger Handfuls, Wide Scoop, Shade Spotter (matching crayons and their box glow), Roomier Boxes, Collector Reputation, Comfy Sneakers, Bigger Deliveries, Tape Gun (auto-pack), Sortbots (little robots that sort for you) and Sortbot Turbo.
-- **Decorations**: plants, rugs, lamps, a beanbag, a fish bowl, a cat bed (with a sleeping cat), a poster, a clock, a window and fairy lights. Each adds coziness, which boosts every coin you earn.
+- **Boxes are free.** Make a box for any shade, as many as you want, and place it anywhere. Six boxes are in the room when you start.
+- **Shelf units are free too.** When a box is full, click it to pack it onto the nearest shelf with room.
+- **Unlocks come from sorting.** Each color family has three milestones (30, 120 and 300 crayons sorted). They unlock upgrades (Bigger Handfuls, Wide Scoop, Shade Spotter, Roomier Boxes, Comfy Sneakers, Tape Gun, Sortbots, Sortbot Turbo) and furniture (plant, rug, lamp, beanbag, fish bowl, cat bed, poster, clock, window, fairy lights). The Collection screen shows what's next.
 
 ## Files
 
