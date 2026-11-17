@@ -12,6 +12,7 @@
   const TOTAL = 60000;        // the whole job: this many crayons, all mixed up
   const MAX_CRAYONS = TOTAL + 1000;
   const BOX_W = 1.1, BOX_D = 0.8, BOX_H = 0.7;
+  const DRAWER_W = 0.8, DRAWER_D = 0.62, DRAWER_H = 0.42, STACK_MAX = 8; // stackable sorting drawers
   const PICK_DIST = 3.6;      // how far away you can grab a crayon
   const TOSS_DIST = 16;       // how far away you can toss into a box
   const SHELF_CAP = 12;       // packed boxes per shelf unit (3 levels x 4)
@@ -140,6 +141,10 @@
   }
   const lvl = id => levels[id] || 0;
   const capacity = () => boxCap(lvl('bigBox'));
+  const isDrawer = b => b.kind === 'drawer';
+  const capOf = b => isDrawer(b) ? capacity() * 3 : capacity();  // a drawer holds three boxes' worth
+  const boxBase = b => isDrawer(b) ? b.level * DRAWER_H : 0;
+  const boxTopY = b => isDrawer(b) ? (b.level + 1) * DRAWER_H : BOX_H;
   // ---------------------------------------------------------------------------
   // Renderer, scene, camera
   // ---------------------------------------------------------------------------
@@ -252,18 +257,30 @@
   // ---------------------------------------------------------------------------
   // Crayons: one instanced mesh for thousands of crayons
   // ---------------------------------------------------------------------------
+  // Wrapper artwork adapted from "crayons w/ box" by Fine_poultry (Sketchfab, CC BY 4.0).
+  // It is a grayscale mask, so each instance's shade color tints it.
+  const WRAPPER_URI = 'data:image/jpeg;base64,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';
+  const wrapperTex = new T.TextureLoader().load(WRAPPER_URI);
+  wrapperTex.wrapS = T.RepeatWrapping;
+  wrapperTex.anisotropy = 4;
+
   function mergeGeos(parts) {
-    const pos = [], nor = [], col = [];
-    for (const [g0, gray] of parts) {
+    const pos = [], nor = [], col = [], uv = [];
+    for (const [g0, gray, wrapped] of parts) {
       const g = g0.index ? g0.toNonIndexed() : g0;
-      const p = g.attributes.position.array, n = g.attributes.normal.array;
+      const p = g.attributes.position.array, n = g.attributes.normal.array, t = g.attributes.uv.array;
       for (let i = 0; i < p.length; i++) { pos.push(p[i]); nor.push(n[i]); }
-      for (let i = 0; i < p.length / 3; i++) col.push(gray, gray, gray);
+      for (let i = 0; i < p.length / 3; i++) {
+        col.push(gray, gray, gray);
+        // bare wax samples a plain part of the wrapper (white in the mask)
+        if (wrapped) uv.push(t[i * 2], t[i * 2 + 1]); else uv.push(0, 0.5);
+      }
     }
     const g = new T.BufferGeometry();
     g.setAttribute('position', new T.Float32BufferAttribute(pos, 3));
     g.setAttribute('normal', new T.Float32BufferAttribute(nor, 3));
     g.setAttribute('color', new T.Float32BufferAttribute(col, 3));
+    g.setAttribute('uv', new T.Float32BufferAttribute(uv, 2));
     return g;
   }
 
@@ -277,15 +294,15 @@
     base.translate(0, -CL / 2, 0);
     const tip = new T.CylinderGeometry(CR * 0.25, CR, tipLen, 6, 1, false);
     tip.translate(0, CL / 2 - tipLen / 2, 0);
-    const wrap = new T.CylinderGeometry(CR * 1.1, CR * 1.1, CL * 0.48, 6, 1, true);
-    wrap.translate(0, -CL * 0.12, 0);
-    const g = mergeGeos([[body, 1], [base, 0.8], [tip, 1], [wrap, 0.62]]);
+    const wrap = new T.CylinderGeometry(CR * 1.08, CR * 1.08, CL * 0.7, 6, 1, true);
+    wrap.translate(0, -CL * 0.06, 0);
+    const g = mergeGeos([[body, 1], [base, 0.8], [tip, 1], [wrap, 0.92, true]]);
     g.rotateZ(-Math.PI / 2); // long axis along +X, tip at +X
     g.computeBoundingSphere();
     return g;
   })();
 
-  const crayonMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.55, metalness: 0 });
+  const crayonMat = new T.MeshStandardMaterial({ map: wrapperTex, vertexColors: true, roughness: 0.55, metalness: 0 });
   const crayonMesh = new T.InstancedMesh(crayonGeo, crayonMat, MAX_CRAYONS);
   crayonMesh.setColorAt(0, new T.Color(1, 1, 1)); // creates the per-instance color buffer
   crayonMesh.count = 0;
@@ -294,7 +311,7 @@
   crayonMesh.frustumCulled = false;
   scene.add(crayonMesh);
 
-  const shadeMats = SHADES.map(s => new T.MeshStandardMaterial({ color: s.hex, vertexColors: true, roughness: 0.55 }));
+  const shadeMats = SHADES.map(s => new T.MeshStandardMaterial({ map: wrapperTex, color: s.hex, vertexColors: true, roughness: 0.55 }));
 
   // Live floor crayons. Index in this array == instance index.
   let cr = [];
@@ -360,7 +377,8 @@
   }
 
   function boxHalf(b) {
-    return b.rot % 2 ? [BOX_D / 2, BOX_W / 2] : [BOX_W / 2, BOX_D / 2];
+    const w = isDrawer(b) ? DRAWER_W : BOX_W, d = isDrawer(b) ? DRAWER_D : BOX_D;
+    return b.rot % 2 ? [d / 2, w / 2] : [w / 2, d / 2];
   }
 
   function blockedAt(x, z, pad = 0.12) {
@@ -516,7 +534,7 @@
     const c = b.labelCanvas;
     const g = c.getContext('2d');
     const s = SHADES[b.color];
-    const full = b.count >= capacity();
+    const full = b.count >= capOf(b);
     g.clearRect(0, 0, c.width, c.height);
     g.fillStyle = s.hex;
     roundRect(g, 6, 6, c.width - 12, 74, 18); g.fill();
@@ -533,7 +551,45 @@
     b.labelTex.needsUpdate = true;
   }
 
+  // Shared parts for drawers: there can be hundreds of them
+  const drawerGeo = {
+    body: new T.BoxGeometry(DRAWER_W, DRAWER_H - 0.02, DRAWER_D),
+    front: new T.BoxGeometry(DRAWER_W - 0.08, DRAWER_H - 0.1, 0.04),
+    handle: new T.BoxGeometry(0.26, 0.045, 0.05),
+    gauge: new T.BoxGeometry(1, 0.035, 0.012),
+  };
+  drawerGeo.gauge.translate(0.5, 0, 0); // grows from the left
+  const handleMat = new T.MeshStandardMaterial({ color: 0xf4efe6, roughness: 0.35 });
+  const handleFullMat = new T.MeshStandardMaterial({ color: 0xf2c14e, roughness: 0.3, metalness: 0.3, emissive: 0x4a3200 });
+  const gaugeMat = new T.MeshStandardMaterial({ color: 0xffffff, roughness: 0.5, emissive: 0x555555 });
+
+  function buildDrawer(b) {
+    const grp = new T.Group();
+    const mat = new T.MeshStandardMaterial({ color: 0xf3ead8, roughness: 0.75, emissive: 0x000000 });
+    const body = new T.Mesh(drawerGeo.body, mat);
+    body.position.y = DRAWER_H / 2;
+    body.castShadow = true; body.receiveShadow = true;
+    grp.add(body);
+    // the drawer front slides out a little when crayons go in
+    const front = new T.Group();
+    const stripeMat = new T.MeshStandardMaterial({ color: SHADES[b.color].hex, roughness: 0.55 });
+    const panel = new T.Mesh(drawerGeo.front, stripeMat);
+    front.add(panel);
+    const handle = new T.Mesh(drawerGeo.handle, handleMat);
+    handle.position.set(0, 0.06, 0.035);
+    front.add(handle);
+    const gauge = new T.Mesh(drawerGeo.gauge, gaugeMat);
+    gauge.position.set(-(DRAWER_W - 0.16) / 2, -0.09, 0.024);
+    front.add(gauge);
+    front.position.set(0, DRAWER_H / 2, DRAWER_D / 2);
+    grp.add(front);
+    Object.assign(b, { group: grp, mat, stripeMat, front, handle, gauge, openT: 0 });
+    scene.add(grp);
+    refreshBox(b);
+  }
+
   function buildBox(b) {
+    if (isDrawer(b)) { buildDrawer(b); return; }
     const grp = new T.Group();
     const mat = new T.MeshStandardMaterial({ color: cardboard, roughness: 0.9, emissive: 0x000000 });
     const t = 0.035;
@@ -576,12 +632,19 @@
   }
 
   function refreshBox(b) {
-    b.group.position.set(b.x, 0, b.z);
+    b.group.position.set(b.x, boxBase(b), b.z);
     b.group.rotation.y = b.rot * Math.PI / 2;
     const col = SHADES[b.color].hex;
     b.stripeMat.color.set(col);
+    if (isDrawer(b)) {
+      const f = Math.min(1, b.count / capOf(b));
+      b.gauge.visible = f > 0;
+      b.gauge.scale.x = Math.max(0.001, f * (DRAWER_W - 0.16));
+      b.handle.material = f >= 1 ? handleFullMat : handleMat;
+      return;
+    }
     b.fillMat.color.set(col);
-    const f = Math.min(1, b.count / capacity());
+    const f = Math.min(1, b.count / capOf(b));
     b.fill.visible = f > 0;
     const h = Math.max(0.02, f * (BOX_H - 0.08));
     b.fill.scale.y = h;
@@ -589,15 +652,38 @@
     drawBoxLabel(b);
   }
 
-  function addBox(x, z, color, rot = 0, count = 0) {
-    const b = { x, z, color, rot, count, incoming: 0 };
+  function addBox(x, z, color, rot = 0, count = 0, kind = 'box', level = 0) {
+    const b = { x, z, color, rot, count, incoming: 0, kind, level };
     state.boxes.push(b);
     buildBox(b);
     return b;
   }
 
+  // Drawers that share a spot form a stack. Close any gaps so nothing floats.
+  const sameSpot = (a, b) => Math.abs(a.x - b.x) < 0.02 && Math.abs(a.z - b.z) < 0.02;
+  function stackAt(x, z, except) {
+    return state.boxes.filter(b => isDrawer(b) && b !== except && !(placing && placing.obj === b) && sameSpot(b, { x, z }));
+  }
+  function restack() {
+    const seen = new Set();
+    for (const b of state.boxes) {
+      if (!isDrawer(b) || seen.has(b) || (placing && placing.obj === b)) continue;
+      const st = stackAt(b.x, b.z).sort((p, q) => p.level - q.level);
+      st.forEach((d, i) => { seen.add(d); if (d.level !== i) { d.level = i; refreshBox(d); } });
+    }
+  }
+  const openDrawers = new Set();
+  function bumpDrawer(b) { b.openT = 1; openDrawers.add(b); }
+  function updateDrawers(dt) {
+    for (const b of openDrawers) {
+      b.openT = Math.max(0, b.openT - dt * 2.2);
+      b.front.position.z = DRAWER_D / 2 + Math.sin(Math.min(1, b.openT) * Math.PI) * 0.16;
+      if (!b.openT) openDrawers.delete(b);
+    }
+  }
+
   function packBox(b) {
-    if (b.count < capacity()) return;
+    if (isDrawer(b) || b.count < capacity()) return;
     // the nearest shelf unit with room gets the packed box
     let shelf = null, bd = Infinity;
     for (const d of state.decor) {
@@ -918,7 +1004,9 @@
     for (const b of state.boxes) {
       if (placing && placing.obj === b) continue;
       const [hw, hd] = boxHalf(b);
-      const t = rayAABB(o, d, [b.x - hw, 0, b.z - hd], [b.x + hw, BOX_H + 0.85, b.z + hd]);
+      const t = isDrawer(b)
+        ? rayAABB(o, d, [b.x - hw, boxBase(b), b.z - hd], [b.x + hw, boxTopY(b), b.z + hd])
+        : rayAABB(o, d, [b.x - hw, 0, b.z - hd], [b.x + hw, BOX_H + 0.85, b.z + hd]);
       if (t !== null && t < bt) { bt = t; best = b; }
     }
     return best ? { obj: best, t: bt } : null;
@@ -978,7 +1066,7 @@
     raycaster.setFromCamera(locked ? CENTER : mouseNDC, camera);
     const o = raycaster.ray.origin, d = raycaster.ray.direction;
     const floor = rayFloor(o, d);
-    if (placing) { aim = { type: 'place', floor, wall: rayWall(o, d) }; return; }
+    if (placing) { aim = { type: 'place', floor, wall: rayWall(o, d), box: rayBox(o, d, 12) }; return; }
     const cands = [];
     const cHit = rayCrayon(o, d, PICK_DIST);
     if (cHit) cands.push({ type: 'crayon', ...cHit });
@@ -1062,14 +1150,17 @@
     const n = hand.n, c = hand.c;
     let warned = false;
     for (let i = 0; i < n; i++) {
-      const to = new T.Vector3(b.x + rand(-0.25, 0.25), BOX_H * 0.6, b.z + rand(-0.18, 0.18));
+      const to = isDrawer(b)
+        ? new T.Vector3(b.x + rand(-0.15, 0.15), boxBase(b) + DRAWER_H * 0.6, b.z + rand(-0.12, 0.12))
+        : new T.Vector3(b.x + rand(-0.25, 0.25), BOX_H * 0.6, b.z + rand(-0.18, 0.18));
       startFlight(c, handWorld, to, i * 0.05, () => {
-        if (b.color === c && b.count < capacity() && state.boxes.includes(b)) {
+        if (b.color === c && b.count < capOf(b) && state.boxes.includes(b)) {
           b.count++;
           recordSort(c, true);
           refreshBox(b);
+          if (isDrawer(b)) bumpDrawer(b);
           blip(620 + Math.random() * 200, 0.06, 'sine', 0.05);
-          if (b.count >= capacity() && lvl('autoPack')) setTimeout(() => packBox(b), 400);
+          if (b.count >= capOf(b) && lvl('autoPack')) setTimeout(() => packBox(b), 400);
         } else {
           // bounce off onto the floor next to the box
           const a = Math.random() * TAU;
@@ -1077,7 +1168,7 @@
           if (!warned) {
             warned = true;
             blip(150, 0.18, 'sawtooth', 0.04);
-            toast(b.color !== c ? `Nope! Those are ${SHADES[c].name}, not ${SHADES[b.color].name}.` : 'That box is full! Click it to pack it up.');
+            toast(b.color !== c ? `Nope! Those are ${SHADES[c].name}, not ${SHADES[b.color].name}.` : isDrawer(b) ? 'That drawer is full! Stack a new one on top.' : 'That box is full! Click it to pack it up.');
           }
         }
       });
@@ -1148,7 +1239,7 @@
   function boxWithSpace(c, x, z) {
     let best = null, bd = Infinity;
     for (const b of state.boxes) {
-      if (b.color !== c || b.count + b.incoming >= capacity()) continue;
+      if (b.color !== c || b.count + b.incoming >= capOf(b)) continue;
       if (placing && placing.obj === b) continue;
       const d = (b.x - x) ** 2 + (b.z - z) ** 2;
       if (d < bd) { bd = d; best = b; }
@@ -1171,7 +1262,7 @@
     if (bot.wait > 0) bot.wait -= dt;
     else if (bot.state === 'idle') {
       const ok = new Set();
-      state.boxes.forEach(b => { if (b.count + b.incoming < capacity()) ok.add(b.color); });
+      state.boxes.forEach(b => { if (b.count + b.incoming < capOf(b)) ok.add(b.color); });
       let best = null, bd = Infinity;
       if (ok.size) for (const c of cr) {
         if (c.claimed || c.delay > 0 || !ok.has(c.c)) continue;
@@ -1187,7 +1278,7 @@
         const box = boxWithSpace(t.c, t.x, t.z);
         if (!box) { t.claimed = false; bot.state = 'idle'; }
         else {
-          const want = Math.min(botCarry(lvl('botSpeed')), capacity() - box.count - box.incoming);
+          const want = Math.min(botCarry(lvl('botSpeed')), capOf(box) - box.count - box.incoming);
           const grab = [t];
           forNear(t.x, t.z, 0.5, o => {
             if (grab.length < want && o !== t && o.c === t.c && !o.claimed && o.delay <= 0) grab.push(o);
@@ -1213,13 +1304,14 @@
         if (moveTo(box.x, box.z + (bot.z > box.z ? hd + 0.4 : -hd - 0.4))) {
           box.incoming = Math.max(0, box.incoming - bot.carry.length);
           for (const c of bot.carry) {
-            if (box.color === c && box.count < capacity()) {
+            if (box.color === c && box.count < capOf(box)) {
               box.count++;
               recordSort(c, false);
             } else addCrayon(bot.x, bot.z, c);
           }
           refreshBox(box);
-          if (box.count >= capacity() && lvl('autoPack')) setTimeout(() => packBox(box), 400);
+          if (isDrawer(box)) bumpDrawer(box);
+          if (box.count >= capOf(box) && lvl('autoPack')) setTimeout(() => packBox(box), 400);
           bot.carry = []; bot.box = null; bot.state = 'idle'; bot.wait = 0.3;
           bot.carryMesh.visible = false;
         }
@@ -1237,7 +1329,8 @@
 
   function startPlacing(kind, obj, isNew) {
     if (hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
-    placing = { kind, obj, isNew, prev: { x: obj.x, y: obj.y, z: obj.z, rot: obj.rot, ry: obj.ry } };
+    placing = { kind, obj, isNew, prev: { x: obj.x, y: obj.y, z: obj.z, rot: obj.rot, ry: obj.ry, level: obj.level } };
+    if (isDrawer(obj)) restack(); // drawers above the one you lift drop down
   }
 
   function updatePlacing() {
@@ -1258,13 +1351,28 @@
     if (!p) p = new T.Vector3(player.x - Math.sin(player.yaw) * 2.5, 0, player.z - Math.cos(player.yaw) * 2.5);
     o.x = clamp(p.x, -HALF + 0.7, HALF - 0.7);
     o.z = clamp(p.z, -HALF + 0.7, HALF - 0.7);
+    if (isDrawer(o)) {
+      // Looking at a drawer (or the floor under one) stacks the new drawer on top of it
+      let base = aim.box && isDrawer(aim.box.obj) ? aim.box.obj : null;
+      if (!base) base = state.boxes.find(b => isDrawer(b) && b !== o && Math.abs(o.x - b.x) < DRAWER_W * 0.6 && Math.abs(o.z - b.z) < DRAWER_W * 0.6);
+      o.level = 0;
+      placing.tooTall = false;
+      if (base) {
+        const st = stackAt(base.x, base.z, o);
+        o.x = base.x; o.z = base.z; o.rot = base.rot;
+        o.level = st.length;
+        placing.tooTall = st.length >= STACK_MAX;
+      }
+    }
     if (placing.kind === 'box') refreshBox(o); else refreshDecor(o);
   }
 
   function finishPlacing() {
     const o = placing.obj;
     const kind = placing.kind;
+    if (placing.tooTall) { toast(`That stack is already ${STACK_MAX} drawers tall. Start a new one beside it.`); return; }
     placing = null;
+    if (isDrawer(o)) restack();
     // Crayons under the new spot get shoved aside
     let r = 0;
     if (kind === 'box') r = Math.max(BOX_W, BOX_D) / 2 + 0.2;
@@ -1284,8 +1392,10 @@
     if (placing.isNew) { finishPlacing(); return; }
     const o = placing.obj;
     Object.assign(o, placing.prev);
+    if (isDrawer(o)) o.level -= 0.5; // slots back in where it came from
     const kind = placing.kind;
     placing = null;
+    if (isDrawer(o)) restack();
     if (kind === 'box') refreshBox(o); else refreshDecor(o);
   }
 
@@ -1293,10 +1403,15 @@
     if (!placing) return;
     const o = placing.obj;
     if (placing.kind === 'box') {
-      if (o.count > 0) { toast('Only empty boxes can be put away. Pack it first.'); return; }
+      if (o.count > 0) { toast(isDrawer(o) ? 'Only empty drawers can be put away.' : 'Only empty boxes can be put away. Pack it first.'); return; }
       scene.remove(o.group);
       state.boxes = state.boxes.filter(x => x !== o);
-      toast(`Put away the ${SHADES[o.color].name} box.`);
+      openDrawers.delete(o);
+      toast(`Put away the ${SHADES[o.color].name} ${isDrawer(o) ? 'drawer' : 'box'}.`);
+      placing = null;
+      restack();
+      save();
+      return;
     } else {
       if (o.type === 'shelf' && o.packed.length) { toast('Only empty shelves can be put away.'); return; }
       scene.remove(o.group);
@@ -1429,17 +1544,18 @@
     let html = '';
     if (placing) {
       const o = placing.obj;
-      const name = placing.kind === 'box' ? `${SHADES[o.color].name} box` : DECOR[o.type].name;
+      const name = placing.kind === 'box' ? `${SHADES[o.color].name} ${isDrawer(o) ? 'drawer' : 'box'}` : DECOR[o.type].name;
       const canRotate = placing.kind === 'box' || !DECOR[o.type].wall;
-      html = `Placing <b>${name}</b> <span class="dim">· click to place${canRotate ? ' · R rotate' : ''}${' · X put away'}${placing.isNew ? '' : ' · Esc cancel'}</span>`;
+      const stackNote = isDrawer(o) ? (placing.tooTall ? ' · stack is full' : o.level ? ` · stacking, level ${o.level + 1}` : ' · look at a drawer to stack on it') : '';
+      html = `Placing <b>${name}</b> <span class="dim">${stackNote} · click to place${canRotate ? ' · R rotate' : ''}${' · X put away'}${placing.isNew ? '' : ' · Esc cancel'}</span>`;
     } else if (aim.type === 'crayon') {
       const s = SHADES[aim.obj.c];
       html = `${sw(s.hex)}<b>${s.name}</b> <span class="dim">· click to ${hand.n ? 'grab more' : 'pick up'}</span>`;
     } else if (aim.type === 'box') {
       const b = aim.obj, s = SHADES[b.color];
-      const full = b.count >= capacity();
-      const what = hand.n ? 'click to toss' : full && !lvl('autoPack') ? 'click to pack' : 'G move' + (b.count === 0 ? ' · C change shade' : '');
-      html = `${sw(s.hex)}<b>${s.name}</b> box ${b.count}/${capacity()} <span class="dim">· ${what}</span>`;
+      const full = b.count >= capOf(b), dr = isDrawer(b);
+      const what = hand.n ? 'click to toss' : full && dr ? 'full! stack another on top' : full && !lvl('autoPack') ? 'click to pack' : 'G move' + (b.count === 0 ? ' · C change shade' : '');
+      html = `${sw(s.hex)}<b>${s.name}</b> ${dr ? 'drawer' : 'box'} ${b.count}/${capOf(b)} <span class="dim">· ${what}</span>`;
     } else if (aim.type === 'decor') {
       html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
     } else if (aim.type === 'floor') {
@@ -1509,6 +1625,7 @@
       return;
     }
     if (aim.type === 'crayon') pickUp(aim.obj);
+    else if (aim.type === 'box' && isDrawer(aim.obj) && aim.obj.count >= capOf(aim.obj)) toast('This drawer is full. Stack a new one on top (E → Boxes & drawers).');
     else if (aim.type === 'box' && aim.obj.count >= capacity() && !lvl('autoPack')) packBox(aim.obj);
   }
 
@@ -1585,7 +1702,7 @@
       updateAim();
       if (aim.type === 'box') {
         if (aim.obj.count === 0) openPicker(aim.obj);
-        else toast('Only empty boxes can change shade. Fill it up and pack it first.');
+        else toast(isDrawer(aim.obj) ? 'Only empty drawers can change shade.' : 'Only empty boxes can change shade. Fill it up and pack it first.');
       }
     }
   });
@@ -1630,6 +1747,7 @@
     return [player.x - Math.sin(player.yaw) * 2.5, player.z - Math.cos(player.yaw) * 2.5];
   }
 
+  let shopKind = 'box';
   function renderShop() {
     document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.tab === shopTab));
     const list = $('shopList');
@@ -1639,9 +1757,16 @@
     if (shopTab === 'boxes') {
       const counts = new Array(SHADES.length).fill(0);
       cr.forEach(o => { counts[o.c]++; });
-      const intro = document.createElement('p');
+      const intro = document.createElement('div');
       intro.className = 'tab-intro';
-      intro.textContent = 'Boxes are free. Grab one for any shade and put it wherever makes sense to you. Make as many as you like.';
+      intro.innerHTML = `<div class="kind-pick">
+          <button data-kind="box" class="${shopKind === 'box' ? 'active' : ''}">📦 Box<small>Packs onto a shelf when full</small></button>
+          <button data-kind="drawer" class="${shopKind === 'drawer' ? 'active' : ''}">🗄️ Drawer<small>Holds ${capacity() * 3}, stacks ${STACK_MAX} high</small></button>
+        </div>
+        <p>${shopKind === 'drawer'
+          ? 'Drawers are free. Look at a drawer while placing a new one to stack it on top, and build towers of sorting drawers.'
+          : 'Boxes are free. Grab one for any shade and put it wherever makes sense to you. Make as many as you like.'}</p>`;
+      intro.querySelectorAll('[data-kind]').forEach(b => { b.onclick = () => { shopKind = b.dataset.kind; renderShop(); }; });
       list.appendChild(intro);
       FAMILIES.forEach((f, fi) => {
         const row = document.createElement('div');
@@ -1649,12 +1774,14 @@
         row.innerHTML = `<h4>${f.name}</h4>`;
         f.shades.forEach((_, si) => {
           const i = fi * 3 + si, s = SHADES[i];
-          const nb = state.boxes.filter(b => b.color === i).length;
+          const nb = state.boxes.filter(b => b.color === i && !isDrawer(b)).length;
+          const nd = state.boxes.filter(b => b.color === i && isDrawer(b)).length;
+          const have = [nb && nb + ' box' + (nb > 1 ? 'es' : ''), nd && nd + ' drawer' + (nd > 1 ? 's' : '')].filter(Boolean).join(', ') || 'nothing yet';
           const btn = document.createElement('button');
-          btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}<small>${counts[i].toLocaleString()} on the floor · ${nb ? nb + ' box' + (nb > 1 ? 'es' : '') : 'no box yet'}</small></span>`;
+          btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}<small>${counts[i].toLocaleString()} on the floor · ${have}</small></span>`;
           btn.onclick = () => {
             const [x, z] = placeAhead();
-            const b = addBox(x, z, i);
+            const b = addBox(x, z, i, 0, 0, shopKind);
             closeModals();
             startPlacing('box', b, true);
             blip(700, 0.08, 'triangle', 0.05);
@@ -1728,7 +1855,7 @@
   // Shade picker for changing an empty box's shade
   function openPicker(box) {
     if (locked) document.exitPointerLock();
-    $('pickerTitle').textContent = 'Change this box to which shade?';
+    $('pickerTitle').textContent = `Change this ${isDrawer(box) ? 'drawer' : 'box'} to which shade?`;
     const list = $('pickerList');
     list.innerHTML = '';
     SHADES.forEach((s, i) => {
@@ -1793,7 +1920,7 @@
       bots.forEach(b => b.carry.forEach(c => loose.push(c)));
       const s = {
         sorted: state.sorted, familySorted: state.familySorted, done: state.done,
-        boxes: state.boxes.map(({ x, z, rot, color, count, packed }) => ({ x, z, rot, color, count, packed })),
+        boxes: state.boxes.map(({ x, z, rot, color, count, packed, kind, level }) => ({ x, z, rot, color, count, packed, kind, level })),
         decor: state.decor.map(({ type, x, y, z, ry, packed }) => ({ type, x, y, z, ry, packed })),
         player: { x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch },
         crayons: flat, loose,
@@ -1819,6 +1946,7 @@
     refreshHand();
     placing = null;
     lampLights = 0;
+    openDrawers.clear();
   }
 
   function newGame() {
@@ -1826,6 +1954,8 @@
     recomputeUnlocks();
     Object.assign(player, state.player);
     START_BOXES.forEach((c, i) => addBox(-5 + i * 2, 8.6, c));
+    // a starter tower of sorting drawers between the shelves
+    [2, 5, 8, 11].forEach((c, i) => addBox(0, 11.5, c, 2, 0, 'drawer', i));
     [-4, 4].forEach(x => {
       const d = { type: 'shelf', x, y: 0, z: 11.4, ry: Math.PI, packed: [] };
       state.decor.push(d);
@@ -1863,7 +1993,8 @@
         });
         recomputeUnlocks();
         Object.assign(player, state.player);
-        (s.boxes || []).forEach(b => { const o = addBox(b.x, b.z, b.color, b.rot || 0, b.count || 0); o.packed = b.packed || 0; });
+        (s.boxes || []).forEach(b => { const o = addBox(b.x, b.z, b.color, b.rot || 0, b.count || 0, b.kind || 'box', b.level || 0); o.packed = b.packed || 0; });
+        restack();
         (s.decor || []).forEach(d => {
           const o = { type: d.type, x: d.x, y: d.y || 0, z: d.z, ry: d.ry || 0, packed: d.packed || [] };
           state.decor.push(o);
@@ -1921,6 +2052,7 @@
     bots.forEach(b => updateBot(b, dt));
     updateGlow(time);
     state.decor.forEach(d => d.update && d.update(time));
+    updateDrawers(dt);
 
 
     if (matDirty) { crayonMesh.instanceMatrix.needsUpdate = true; matDirty = false; }
