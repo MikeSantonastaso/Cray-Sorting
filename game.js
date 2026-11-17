@@ -1414,8 +1414,17 @@
     $('btnSound').textContent = muted ? '🔇' : '🔊';
   };
   $('btnHelp').onclick = () => { $('help').hidden = false; };
+  let resetArmed = 0;
   $('btnReset').onclick = () => {
-    if (!confirm('Erase all progress and start over?')) return;
+    // Two-step confirm inside the page (browser confirm dialogs are not available everywhere)
+    if (Date.now() - resetArmed > 3000) {
+      resetArmed = Date.now();
+      $('btnReset').textContent = 'Click again to erase everything';
+      setTimeout(() => { $('btnReset').textContent = 'Reset all progress'; }, 3000);
+      return;
+    }
+    resetArmed = 0;
+    $('btnReset').textContent = 'Reset all progress';
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
     hand = []; bots = []; selected = null;
     newGame();
