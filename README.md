@@ -26,7 +26,9 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Collection (unlocks and progress) | `F` |
 | Move a box, drawer, shelf or decoration | Look at it and press `G`, then click to place (`R` rotates, `X` puts it away) |
 | Change an empty box's shade | Look at it and press `C` |
-| Color in a coloring book | Click a Coloring Table |
+| Color a page on the coloring table | Hold a crayon, look at the page, click or press `V` |
+| Scribble on walls and furniture | Hold `V` while holding a crayon |
+| Take a hidden coloring page | Click it |
 
 On phones and tablets there's an on-screen joystick for walking; drag to look and tap to act.
 
@@ -40,7 +42,8 @@ On phones and tablets there's an on-screen joystick for walking; drag to look an
 ## Furniture and coloring books
 
 - **The room comes furnished.** There's a coloring corner, an art corner with a desk and easel, a reading nook, a lounge with a sofa, bookcases and cubbies by the walls, area rugs (buried under crayons until you clear them) and plants in the corners. Older saves get the furniture added on load, skipping any spot you've already used. Move anything with `G`, and add more from E → Furniture.
-- **Coloring books.** Click a coloring table to open five line-art pages (Sleepy Cat, Cozy House, Goldfish Friends, Rocket Trip, Flower Garden). Draw with a waxy crayon brush in three sizes, or use the eraser. You start with Cherry, Ocean and Sunshine, and every shade you sort joins your coloring box. Your pages save in the browser, and the open book on the table shows the page you're working on.
+- **Coloring pages.** Coloring pages are scattered on the coloring table. Hold a crayon, look at a page and click it (or press `V`) to color it with that crayon. Pick up a different shade to switch colors. Three pages start on the table, and seven more are hidden around the room: in heaps, on furniture, on a windowsill, taped to the door. Click a hidden page to add it to the table. The Collection screen tracks what you've found and colored.
+- **Scribble on anything.** Hold `V` with a crayon in hand and look around to draw on the walls, furniture, boxes, anything. Scribbles save, and moving a piece of furniture wipes the scribbles on it.
 
 ## Files
 

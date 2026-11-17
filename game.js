@@ -1159,22 +1159,13 @@
         g.add(mesh(new T.BoxGeometry(1.6, 0.06, 1.0), top, 0, 0.6, 0));
         g.add(mesh(new T.BoxGeometry(1.64, 0.04, 1.04), std(0x7fbf9b), 0, 0.565, 0));
         for (const [x, z] of [[-0.7, -0.4], [0.7, -0.4], [-0.7, 0.4], [0.7, 0.4]]) g.add(mesh(new T.CylinderGeometry(0.04, 0.035, 0.56, 10), std(0x7fbf9b), x, 0.28, z));
-        const pages = new T.Mesh(new T.PlaneGeometry(1.1, 0.415), new T.MeshStandardMaterial({ map: bookTex, roughness: 0.9 }));
-        pages.rotation.x = -Math.PI / 2;
-        pages.position.set(-0.1, 0.645, 0.08);
-        g.add(pages);
-        g.add(mesh(new T.BoxGeometry(1.15, 0.012, 0.46), std(0xd7263d), -0.1, 0.636, 0.08, false));
+        addTableSheets(d, g);
         const cup = mesh(new T.CylinderGeometry(0.08, 0.07, 0.16, 14, 1, true), std(0x6a8fd6, { side: T.DoubleSide }), 0.6, 0.71, -0.25);
         g.add(cup);
         COLOR_STARTERS.concat([13, 19]).forEach((c, i) => {
           const m = new T.Mesh(crayonGeo, shadeMats[c]);
           m.rotation.set((i - 2) * 0.12, i, Math.PI / 2 - 0.1 * (i % 2));
           m.position.set(0.6 + Math.cos(i * 1.3) * 0.03, 0.78, -0.25 + Math.sin(i * 1.3) * 0.03);
-          g.add(m);
-        });
-        [[4, 0.45, 0.3, 0.4], [10, 0.25, 0.32, -0.9]].forEach(([c, x, z, ry]) => {
-          const m = new T.Mesh(crayonGeo, shadeMats[c]);
-          m.position.set(x, 0.665, z); m.rotation.y = ry;
           g.add(m);
         });
         break;
@@ -1496,6 +1487,9 @@
     if (floor) cands.push({ type: 'floor', t: floor.t, point: floor.point });
     cands.sort((a, b) => a.t - b.t);
     aim = cands[0] || { type: null };
+    // paper sheets sit on (or in) other things, so they win unless a crayon or box is in front
+    const pgHit = rayPages(4.5);
+    if (pgHit && (!['crayon', 'box'].includes(aim.type) || pgHit.t < aim.t)) aim = { type: 'page', ...pgHit };
     // While holding crayons, a crayon of another shade in the way counts as "drop here"
     if (hand.n && aim.type === 'crayon' && aim.obj.c !== hand.c) {
       aim = { type: 'floor', t: aim.t, point: new T.Vector3().copy(o).addScaledVector(d, aim.t) };
@@ -1766,6 +1760,10 @@
   function startPlacing(kind, obj, isNew) {
     if (hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
     placing = { kind, obj, isNew, prev: { x: obj.x, y: obj.y, z: obj.z, rot: obj.rot, ry: obj.ry, level: obj.level } };
+    if (!isNew && !(kind === 'decor' && (DECOR[obj.type].wall || DECOR[obj.type].under))) {
+      removeMarksNear(obj.x, obj.z, kind === 'box' ? 0.75 : DECOR[obj.type].r + 0.2);
+      saveMarks();
+    }
     if (isDrawer(obj)) restack(); // drawers above the one you lift drop down
   }
 
@@ -2006,8 +2004,12 @@
         : full && !dr && !lvl('autoPack') ? 'click to pack · T take some out'
         : (b.count ? 'click to take some out · ' : '') + (full && dr ? 'full, stack another on top · ' : '') + 'G move' + (b.count === 0 ? ' · C change shade' : '');
       html = `${sw(s.hex)}<b>${s.name}</b> ${dr ? 'drawer' : 'box'} ${b.count}/${capOf(b)} <span class="dim">· ${what}</span>`;
+    } else if (aim.type === 'page') {
+      const u = aim.obj.userData;
+      html = u.hidden ? '📄 <b>A coloring page!</b> <span class="dim">· click to take it</span>'
+        : `📄 <b>${PAGES[u.page].name}</b> <span class="dim">· ${hand.n ? 'click or V to color with ' + SHADES[hand.c].name : 'pick up a crayon to color'}</span>`;
     } else if (aim.type === 'decor') {
-      html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· ${aim.obj.type === 'table' && !hand.n ? 'click to color · ' : ''}G move</span>`;
+      html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
     } else if (aim.type === 'floor') {
       if (hand.n && aim.t < 9) html = '<span class="dim">click to drop here</span>';
       else if (aim.rug && aim.t < 8) html = `<b>${DECOR[aim.rug.type].name}</b> <span class="dim">· G move</span>`;
@@ -2071,12 +2073,14 @@
       if (aim.type === 'crayon' && aim.obj.c === hand.c) pickUp(aim.obj);
       else if (aim.type === 'box') tossToBox(aim.obj);
       else if (aim.type === 'floor' && aim.t < 9) dropAt(aim.point);
-      else if (aim.type === 'decor' && aim.obj.type === 'table') toast('Put your crayons away first, then sit down to color.');
+      else if (aim.type === 'page' && aim.obj.userData.hidden) findPage(aim.obj);
+      else if (aim.type === 'page') openColoring(aim.obj.userData.page);
       else if (aim.type === 'decor') toast('Toss crayons into a box, or click the floor to drop them.');
       return;
     }
     if (aim.type === 'crayon') pickUp(aim.obj);
-    else if (aim.type === 'decor' && aim.obj.type === 'table') openColoring();
+    else if (aim.type === 'page' && aim.obj.userData.hidden) findPage(aim.obj);
+    else if (aim.type === 'page') toast('Pick up a crayon, then click this page (or press V) to color it.');
     else if (aim.type === 'box' && !isDrawer(aim.obj) && aim.obj.count >= capacity() && !lvl('autoPack')) packBox(aim.obj);
     else if (aim.type === 'box') takeFromBox(aim.obj);
   }
@@ -2143,6 +2147,11 @@
       const o = placing.obj;
       if (placing.kind === 'box') { o.rot = ((o.rot || 0) + 1) % 4; refreshBox(o); }
       else if (!DECOR[o.type].wall) { o.ry = (o.ry || 0) + Math.PI / 4; refreshDecor(o); }
+    } else if (e.code === 'KeyV' && !placing && !e.repeat) {
+      updateAim();
+      if (aim.type === 'page' && aim.obj.userData.hidden) findPage(aim.obj);
+      else if (aim.type === 'page') openColoring(aim.obj.userData.page);
+      else startScribble();
     } else if (e.code === 'KeyX' && placing) putAway();
     else if (e.code === 'KeyT' && !placing) {
       updateAim();
@@ -2162,7 +2171,7 @@
       }
     }
   });
-  window.addEventListener('keyup', e => keys.delete(e.code));
+  window.addEventListener('keyup', e => { keys.delete(e.code); if (e.code === 'KeyV') stopScribble(); });
   window.addEventListener('blur', () => keys.clear());
 
   // Touch joystick for walking on phones and tablets
@@ -2285,6 +2294,13 @@
         return `<div class="up${l ? '' : ' off'}">${u.icon} <b>${u.name}</b>${l > 1 && !['autoPack', 'botSpeed'].includes(id) ? ' ×' + l : ''}<small>${l ? u.info(l) : 'Not unlocked yet'}</small></div>`;
       }).join('');
       list.appendChild(ups);
+      const pg = document.createElement('div');
+      pg.className = 'ups';
+      pg.innerHTML = `<h4>📄 Coloring pages: ${coloring.found.size} of ${PAGES.length} found</h4>` + PAGES.map((page, i) => {
+        const got = coloring.found.has(i);
+        return `<div class="up${got ? '' : ' off'}">${got ? '📄' : '❔'} <b>${got ? page.name : 'Hidden somewhere'}</b><small>${got ? (coloring.strokes[i] ? coloring.strokes[i] + ' strokes colored' : 'Not colored yet') : 'Keep looking around the room'}</small></div>`;
+      }).join('');
+      list.appendChild(pg);
       FAMILIES.forEach((f, fi) => {
         const n = state.familyBest[fi];
         const el = document.createElement('div');
@@ -2324,10 +2340,10 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Coloring books: color line-art pages with the shades you've sorted
+  // Coloring pages: color line-art pages with the crayon you're holding
   // ---------------------------------------------------------------------------
   const COLOR_KEY = 'cray-sorting-coloring-v1';
-  const COLOR_STARTERS = [1, 4, 7]; // Cherry, Ocean, Sunshine come in the cup on the table
+  const COLOR_STARTERS = [1, 4, 7]; // the crayons standing in the cup on the coloring table
   const PAGE_W = 640, PAGE_H = 480;
   const line = (g, w = 6) => { g.strokeStyle = '#222'; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; };
   const circle = (g, x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); };
@@ -2402,55 +2418,171 @@
       ellipse(g, 450, 70, 30, 22, -0.5); ellipse(g, 492, 70, 30, 22, 0.5); ellipse(g, 455, 108, 22, 15, 0.4); ellipse(g, 488, 108, 22, 15, -0.4);
       g.beginPath(); g.moveTo(471, 60); g.lineTo(471, 120); g.moveTo(471, 60); g.lineTo(455, 35); g.moveTo(471, 60); g.lineTo(487, 35); g.stroke();
     } },
+    { name: 'Dino Stomp', draw: g => {
+      line(g);
+      g.beginPath(); g.moveTo(120, 330); g.bezierCurveTo(130, 220, 260, 200, 330, 240); g.bezierCurveTo(360, 180, 360, 120, 400, 95);
+      g.bezierCurveTo(440, 70, 520, 80, 520, 120); g.bezierCurveTo(520, 150, 470, 150, 440, 145); g.bezierCurveTo(420, 200, 430, 260, 420, 300);
+      g.bezierCurveTo(400, 360, 300, 370, 230, 350); g.bezierCurveTo(170, 345, 100, 360, 30, 330); g.bezierCurveTo(70, 320, 100, 330, 120, 330); g.stroke();
+      circle(g, 470, 105, 8);
+      g.beginPath(); g.moveTo(480, 130); g.lineTo(510, 128); g.stroke();
+      for (const x of [200, 260, 330, 380]) { g.beginPath(); g.moveTo(x, 345); g.lineTo(x - 5, 420); g.lineTo(x + 25, 420); g.lineTo(x + 25, 350); g.stroke(); }
+      for (const [x, y] of [[190, 235], [240, 215], [290, 215], [335, 225], [365, 175], [385, 130]]) poly(g, [[x - 18, y + 6], [x, y - 26], [x + 18, y + 4]], false);
+      g.beginPath(); g.moveTo(0, 425); g.lineTo(640, 425); g.stroke();
+      circle(g, 560, 360, 40); circle(g, 545, 345, 6); circle(g, 575, 370, 8);
+    } },
+    { name: 'Friendly Robot', draw: g => {
+      line(g);
+      g.strokeRect(240, 70, 160, 120); circle(g, 285, 125, 18); circle(g, 355, 125, 18);
+      g.strokeRect(285, 160, 70, 14);
+      g.beginPath(); g.moveTo(320, 70); g.lineTo(320, 35); g.stroke(); circle(g, 320, 26, 10);
+      g.strokeRect(210, 200, 220, 170); g.strokeRect(260, 230, 120, 70);
+      circle(g, 285, 335, 12); circle(g, 320, 335, 12); circle(g, 355, 335, 12);
+      g.strokeRect(150, 210, 50, 130); g.strokeRect(440, 210, 50, 130);
+      circle(g, 175, 360, 22); circle(g, 465, 360, 22);
+      g.strokeRect(250, 370, 50, 70); g.strokeRect(340, 370, 50, 70);
+      g.strokeRect(235, 440, 80, 22); g.strokeRect(325, 440, 80, 22);
+    } },
+    { name: 'Sailboat Day', draw: g => {
+      line(g);
+      g.beginPath(); g.moveTo(170, 330); g.lineTo(470, 330); g.lineTo(420, 400); g.lineTo(220, 400); g.closePath(); g.stroke();
+      g.beginPath(); g.moveTo(320, 330); g.lineTo(320, 70); g.stroke();
+      poly(g, [[320, 80], [320, 310], [190, 310]]); poly(g, [[330, 110], [330, 310], [450, 310]]);
+      poly(g, [[320, 70], [370, 82], [320, 94]]);
+      for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(0, 410 + i * 18); for (let x = 0; x <= 640; x += 40) g.quadraticCurveTo(x + 20, 400 + i * 18, x + 40, 410 + i * 18); g.stroke(); }
+      circle(g, 90, 90, 45);
+      g.beginPath(); g.moveTo(500, 120); g.quadraticCurveTo(515, 105, 530, 120); g.quadraticCurveTo(545, 105, 560, 120); g.stroke();
+    } },
+    { name: 'Teddy Bear', draw: g => {
+      line(g);
+      circle(g, 320, 150, 80); circle(g, 250, 85, 30); circle(g, 390, 85, 30);
+      ellipse(g, 320, 180, 35, 25); circle(g, 290, 135, 8); circle(g, 350, 135, 8);
+      g.beginPath(); g.moveTo(320, 170); g.lineTo(320, 188); g.moveTo(305, 192); g.quadraticCurveTo(320, 202, 335, 192); g.stroke();
+      ellipse(g, 320, 330, 95, 105); ellipse(g, 320, 340, 50, 55);
+      ellipse(g, 205, 290, 30, 55, 0.6); ellipse(g, 435, 290, 30, 55, -0.6);
+      ellipse(g, 255, 430, 45, 30); ellipse(g, 385, 430, 45, 30);
+      poly(g, [[290, 230], [320, 245], [350, 230], [350, 260], [320, 245], [290, 260]]);
+    } },
+    { name: 'Crayon Castle', draw: g => {
+      line(g);
+      g.strokeRect(180, 200, 280, 240);
+      for (const x of [120, 460]) { g.strokeRect(x, 140, 60, 300); poly(g, [[x - 10, 140], [x + 30, 70], [x + 70, 140]]); }
+      for (let i = 0; i < 7; i++) g.strokeRect(180 + i * 40, 175, 20, 25);
+      g.beginPath(); g.moveTo(280, 440); g.lineTo(280, 360); g.arc(320, 360, 40, Math.PI, 0); g.lineTo(360, 440); g.stroke();
+      g.strokeRect(220, 250, 35, 50); g.strokeRect(385, 250, 35, 50);
+      for (const x of [150, 490]) { g.beginPath(); g.moveTo(x, 70); g.lineTo(x, 30); g.stroke(); poly(g, [[x, 30], [x + 35, 40], [x, 50]]); }
+      g.beginPath(); g.moveTo(0, 440); g.lineTo(640, 440); g.stroke();
+    } },
   ];
 
-  const coloring = { page: 0, pages: PAGES.map(() => null), color: COLOR_STARTERS[0], size: 14, eraser: false, loaded: false };
+  // Three pages start on the coloring table; the rest are hidden around the room
+  const STARTER_PAGES = [0, 1, 2];
+  const HIDDEN_PAGES = [
+    { page: 3, where: 'buried in the big heap', pos: [-1.2, 0.006, -0.8], rot: [-Math.PI / 2, 0.4, 0] },
+    { page: 4, where: 'on top of a bookcase', pos: [-11.6, 1.868, 1.6], rot: [-Math.PI / 2, 1.2, 0] },
+    { page: 5, where: 'behind the sofa', pos: [11.25, 0.006, 8.9], rot: [-Math.PI / 2, -0.3, 0] },
+    { page: 6, where: 'on a windowsill', pos: [5.6, 1.718, -11.85], rot: [-Math.PI / 2, 0.15, 0] },
+    { page: 7, where: 'on top of the toy cubbies', pos: [11.55, 1.025, 3.2], rot: [-Math.PI / 2, 2.0, 0] },
+    { page: 8, where: 'taped to the door', pos: [-HALF + 0.07, 1.55, -3.15], rot: [0, Math.PI / 2, 0.08] },
+    { page: 9, where: 'on top of a shelf unit', pos: [4.3, 2.16, 11.35], rot: [-Math.PI / 2 + 0.5, Math.PI, 0] },
+  ];
+  const coloring = { page: 0, size: 14, eraser: false, found: new Set(STARTER_PAGES), strokes: PAGES.map(() => 0) };
   const paintCanvases = PAGES.map(() => { const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; return c; });
   const lineCanvases = PAGES.map(pg => {
     const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H;
     pg.draw(c.getContext('2d'));
     return c;
   });
+  // small textures of each page for the paper sheets in the room
+  const pageThumbs = PAGES.map(() => { const c = document.createElement('canvas'); c.width = 256; c.height = 192; return c; });
+  const pageTexs = pageThumbs.map(c => { const t = new T.CanvasTexture(c); t.anisotropy = 4; return t; });
+  function updatePageTex(i) {
+    const g = pageThumbs[i].getContext('2d');
+    g.fillStyle = '#fffdf6'; g.fillRect(0, 0, 256, 192);
+    g.drawImage(paintCanvases[i], 0, 0, 256, 192);
+    g.drawImage(lineCanvases[i], 0, 0, 256, 192);
+    pageTexs[i].needsUpdate = true;
+  }
+  PAGES.forEach((_, i) => updatePageTex(i));
+
   function loadColoring() {
-    if (coloring.loaded) return;
-    coloring.loaded = true;
     try {
       const s = JSON.parse(localStorage.getItem(COLOR_KEY) || 'null');
       if (!s) return;
-      coloring.page = clamp(s.page || 0, 0, PAGES.length - 1);
+      (s.found || []).forEach(i => { if (PAGES[i]) coloring.found.add(i); });
+      (s.strokes || []).forEach((n, i) => { if (i < PAGES.length) coloring.strokes[i] = n || 0; });
       (s.pages || []).forEach((url, i) => {
         if (!url || !paintCanvases[i]) return;
+        paintCanvases[i].hasPaint = true;
         const img = new Image();
-        img.onload = () => { paintCanvases[i].getContext('2d').drawImage(img, 0, 0); drawColoringView(); updateBookTex(); };
+        img.onload = () => { paintCanvases[i].getContext('2d').drawImage(img, 0, 0); updatePageTex(i); };
         img.src = url;
       });
     } catch (e) { /* ignore */ }
   }
   function saveColoring() {
     try {
-      const pages = paintCanvases.map(c => (c.dirty || c.hasPaint) ? c.toDataURL('image/png') : null);
-      localStorage.setItem(COLOR_KEY, JSON.stringify({ page: coloring.page, pages }));
+      const pages = paintCanvases.map(c => c.hasPaint ? c.toDataURL('image/png') : null);
+      localStorage.setItem(COLOR_KEY, JSON.stringify({ found: [...coloring.found], strokes: coloring.strokes, pages }));
     } catch (e) { /* storage may be full */ }
   }
+  loadColoring();
 
-  // The open book on every coloring table shows the page you're working on
-  const bookCanvas = document.createElement('canvas');
-  bookCanvas.width = 1024; bookCanvas.height = 386;
-  const bookTex = new T.CanvasTexture(bookCanvas);
-  bookTex.anisotropy = 4;
-  function updateBookTex() {
-    const g = bookCanvas.getContext('2d');
-    g.fillStyle = '#fffdf6'; g.fillRect(0, 0, 1024, 386);
-    g.fillStyle = '#f1e9d8'; g.fillRect(500, 0, 24, 386);
-    g.fillStyle = '#3a2e2a'; g.textAlign = 'center';
-    g.font = 'bold 40px "Trebuchet MS", sans-serif';
-    g.fillText('Coloring Book', 250, 150);
-    g.font = '30px "Trebuchet MS", sans-serif';
-    g.fillText(PAGES[coloring.page].name, 250, 210);
-    SHADES.forEach((s, i) => { if (i % 3 === 1) { g.fillStyle = s.hex; g.fillRect(80 + (i / 3 | 0) * 34, 260, 24, 60); } });
-    g.drawImage(paintCanvases[coloring.page], 532, 12, 480, 360);
-    g.drawImage(lineCanvases[coloring.page], 532, 12, 480, 360);
-    bookTex.needsUpdate = true;
+  // Paper sheets you can look at and click
+  const sheetGeo = new T.PlaneGeometry(0.3, 0.225);
+  const sheetMats = pageTexs.map(t => new T.MeshStandardMaterial({ map: t, roughness: 0.9, side: T.DoubleSide }));
+  const pageMeshes = [];   // sheets on the coloring table
+  const hiddenMeshes = []; // sheets still waiting to be found
+  const sheetSpots = [[-0.55, -0.25, 0.2], [-0.22, -0.3, -0.15], [0.12, -0.22, 0.1], [-0.6, 0.05, -0.1], [-0.27, 0.02, 0.25], [0.06, 0.1, -0.2],
+    [0.38, 0.2, 0.15], [-0.55, 0.33, 0.05], [-0.2, 0.35, -0.25], [0.15, 0.36, 0.3]];
+  const mainTable = () => state && state.decor.find(t => t.type === 'table');
+  function addTableSheets(d, g) {
+    for (let k = pageMeshes.length - 1; k >= 0; k--) if (pageMeshes[k].userData.table === d) pageMeshes.splice(k, 1);
+    if (d !== mainTable()) return;
+    [...coloring.found].sort((a, b) => a - b).forEach((i, k) => {
+      const [x, z, r] = sheetSpots[k % sheetSpots.length];
+      const m = new T.Mesh(sheetGeo, sheetMats[i]);
+      m.rotation.set(-Math.PI / 2, 0, r);
+      m.position.set(x, 0.632 + k * 0.0015, z);
+      m.receiveShadow = true;
+      m.userData = { page: i, table: d };
+      g.add(m);
+      pageMeshes.push(m);
+    });
+  }
+  function refreshTableSheets() {
+    const t = mainTable();
+    state.decor.filter(d => d.type === 'table').forEach(rebuildDecor);
+    if (!t) pageMeshes.length = 0;
+  }
+  const hiddenGroup = new T.Group();
+  scene.add(hiddenGroup);
+  function placeHiddenPages() {
+    hiddenMeshes.forEach(m => hiddenGroup.remove(m));
+    hiddenMeshes.length = 0;
+    for (const h of HIDDEN_PAGES) {
+      if (coloring.found.has(h.page)) continue;
+      const m = new T.Mesh(sheetGeo, sheetMats[h.page]);
+      m.position.set(...h.pos);
+      m.rotation.set(h.rot[0], h.rot[1], h.rot[2], 'YXZ');
+      m.userData = { page: h.page, hidden: h };
+      hiddenGroup.add(m);
+      hiddenMeshes.push(m);
+    }
+  }
+  placeHiddenPages();
+  function rayPages(maxT) {
+    raycaster.far = maxT;
+    const hits = raycaster.intersectObjects(pageMeshes.concat(hiddenMeshes), false);
+    raycaster.far = Infinity;
+    return hits.length ? { obj: hits[0].object, t: hits[0].distance } : null;
+  }
+  function findPage(m) {
+    const h = m.userData.hidden;
+    coloring.found.add(h.page);
+    saveColoring();
+    placeHiddenPages();
+    refreshTableSheets();
+    celebrate(`📄 Found a coloring page: ${PAGES[h.page].name}!`, `It was ${h.where}. It's on the coloring table now (${coloring.found.size} of ${PAGES.length} found).`);
   }
 
   const colorView = $('colorCanvas');
@@ -2460,46 +2592,23 @@
     cvx.drawImage(paintCanvases[coloring.page], 0, 0);
     cvx.drawImage(lineCanvases[coloring.page], 0, 0);
   }
-  const shadeUnlocked = i => COLOR_STARTERS.includes(i) || state.shadeSorted[i] > 0;
-
   function renderColoringUI() {
-    $('colorPages').innerHTML = '';
-    PAGES.forEach((pg, i) => {
-      const b = document.createElement('button');
-      b.textContent = pg.name;
-      b.className = i === coloring.page ? 'active' : '';
-      b.onclick = () => { coloring.page = i; renderColoringUI(); drawColoringView(); updateBookTex(); };
-      $('colorPages').appendChild(b);
-    });
-    const pal = $('colorPalette');
-    pal.innerHTML = '';
-    let have = 0;
-    SHADES.forEach((s, i) => {
-      const open = shadeUnlocked(i);
-      if (open) have++;
-      const b = document.createElement('button');
-      b.className = 'crayon-pick' + (open ? '' : ' locked') + (!coloring.eraser && coloring.color === i ? ' active' : '');
-      b.style.setProperty('--c', s.hex);
-      b.title = open ? s.name : `${s.name}: sort one to color with it`;
-      b.innerHTML = `<span class="tip"></span><span class="stick"></span>`;
-      b.onclick = () => {
-        if (!open) { toast(`Sort a ${s.name} crayon to color with it.`); return; }
-        coloring.color = i; coloring.eraser = false; renderColoringUI();
-      };
-      pal.appendChild(b);
-    });
-    $('colorNote').textContent = have < SHADES.length
-      ? `${have} of ${SHADES.length} shades. Sort a crayon of any shade to add it to your coloring box.`
-      : 'You have every shade. Go wild!';
+    $('colorTitle').textContent = PAGES[coloring.page].name;
+    $('colorFound').textContent = `${coloring.found.size} of ${PAGES.length} pages found`;
+    const s = SHADES[coloring.color];
+    $('colorCurrent').innerHTML = coloring.eraser ? 'Eraser' : `<span class="sw" style="background:${s.hex}"></span>${s.name}`;
     document.querySelectorAll('#colorTools [data-size]').forEach(b => b.classList.toggle('active', !coloring.eraser && +b.dataset.size === coloring.size));
     $('colorEraser').classList.toggle('active', coloring.eraser);
-    $('colorCurrent').textContent = coloring.eraser ? 'Eraser' : SHADES[coloring.color].name;
+    $('colorNote').textContent = coloring.found.size < PAGES.length
+      ? `You're coloring with the crayon in your hand. Pick up another shade to switch colors. ${PAGES.length - coloring.found.size} more pages are hidden around the room.`
+      : "You're coloring with the crayon in your hand. Pick up another shade to switch colors. You've found every page!";
   }
-
-  function openColoring() {
-    loadColoring();
+  function openColoring(page) {
+    if (!hand.n) { toast('Pick up a crayon first, then color with it (V).'); return; }
     if (locked) document.exitPointerLock();
-    if (!shadeUnlocked(coloring.color)) coloring.color = COLOR_STARTERS[0];
+    coloring.page = page;
+    coloring.color = hand.c;
+    coloring.eraser = false;
     renderColoringUI();
     drawColoringView();
     $('coloring').hidden = false;
@@ -2545,7 +2654,13 @@
     strokeTo(...pagePoint(e));
   });
   colorView.addEventListener('pointermove', e => { if (stroke && stroke.id === e.pointerId) strokeTo(...pagePoint(e)); });
-  const endStroke = () => { if (!stroke) return; stroke = null; updateBookTex(); saveColoring(); };
+  const endStroke = () => {
+    if (!stroke) return;
+    stroke = null;
+    if (!coloring.eraser) coloring.strokes[coloring.page]++;
+    updatePageTex(coloring.page);
+    saveColoring();
+  };
   colorView.addEventListener('pointerup', endStroke);
   colorView.addEventListener('pointercancel', endStroke);
   document.querySelectorAll('#colorTools [data-size]').forEach(b => { b.onclick = () => { coloring.size = +b.dataset.size; coloring.eraser = false; renderColoringUI(); }; });
@@ -2556,11 +2671,114 @@
     clearArmed = 0; $('colorClear').textContent = '🧽 Clear page';
     const c = paintCanvases[coloring.page];
     c.getContext('2d').clearRect(0, 0, PAGE_W, PAGE_H);
-    c.hasPaint = false; c.dirty = true;
-    drawColoringView(); updateBookTex(); saveColoring();
+    c.hasPaint = false;
+    drawColoringView(); updatePageTex(coloring.page); saveColoring();
   };
-  updateBookTex();
-  setTimeout(loadColoring, 0);
+
+  // ---------------------------------------------------------------------------
+  // Scribbling on the room: hold V with a crayon to draw on walls and furniture
+  // ---------------------------------------------------------------------------
+  const MARKS_KEY = 'cray-sorting-marks-v1';
+  const MARK_MAX = 20000;
+  const markMesh = new T.InstancedMesh(new T.CircleGeometry(0.02, 7), new T.MeshStandardMaterial({ roughness: 0.9, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }), MARK_MAX);
+  markMesh.setColorAt(0, new T.Color(1, 1, 1));
+  markMesh.count = 0;
+  markMesh.frustumCulled = false;
+  scene.add(markMesh);
+  const marks = []; // {x,y,z,nx,ny,nz,c}
+  let markHead = 0;
+  const _mq = new T.Quaternion(), _mq2 = new T.Quaternion(), _mz = new T.Vector3(0, 0, 1), _mn = new T.Vector3(), _mp = new T.Vector3(), _ms = new T.Vector3(), _mm = new T.Matrix4();
+  function writeMark(i) {
+    const k = marks[i];
+    _mn.set(k.nx, k.ny, k.nz);
+    _mq.setFromUnitVectors(_mz, _mn);
+    _mq2.setFromAxisAngle(_mz, (i * 2.399) % TAU);
+    _mq.multiply(_mq2);
+    const sc = 0.75 + ((i * 7919) % 50) / 100;
+    _ms.set(sc, sc * 0.8, 1);
+    _mp.set(k.x, k.y, k.z);
+    _mm.compose(_mp, _mq, _ms);
+    markMesh.setMatrixAt(i, _mm);
+    markMesh.setColorAt(i, SHADE_COLORS[k.c]);
+  }
+  function addMark(p, n, c) {
+    const k = { x: p.x + n.x * 0.004, y: p.y + n.y * 0.004, z: p.z + n.z * 0.004, nx: n.x, ny: n.y, nz: n.z, c };
+    let i;
+    if (marks.length < MARK_MAX) { i = marks.length; marks.push(k); }
+    else { i = markHead; marks[i] = k; markHead = (markHead + 1) % MARK_MAX; }
+    writeMark(i);
+    markMesh.count = marks.length;
+    markMesh.instanceMatrix.needsUpdate = true;
+    markMesh.instanceColor.needsUpdate = true;
+  }
+  function rebuildMarks() {
+    marks.forEach((_, i) => writeMark(i));
+    markMesh.count = marks.length;
+    markMesh.instanceMatrix.needsUpdate = true;
+    if (markMesh.instanceColor) markMesh.instanceColor.needsUpdate = true;
+  }
+  // moving or putting away furniture takes its scribbles with it (they'd float otherwise)
+  function removeMarksNear(x, z, r) {
+    const keep = marks.filter(k => Math.hypot(k.x - x, k.z - z) > r || Math.abs(k.x) > HALF - 0.05 || Math.abs(k.z) > HALF - 0.05);
+    if (keep.length === marks.length) return;
+    marks.length = 0; marks.push(...keep); markHead = 0;
+    rebuildMarks();
+  }
+  function clearMarks() { marks.length = 0; markHead = 0; markMesh.count = 0; try { localStorage.removeItem(MARKS_KEY); } catch (e) { /* ignore */ } }
+  function saveMarks() {
+    try {
+      const f = new Int16Array(marks.length * 7);
+      marks.forEach((k, i) => { f.set([k.x * 1000, k.y * 1000, k.z * 1000, k.nx * 1000, k.ny * 1000, k.nz * 1000, k.c], i * 7); });
+      const bytes = new Uint8Array(f.buffer);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      localStorage.setItem(MARKS_KEY, btoa(bin));
+    } catch (e) { /* storage may be full */ }
+  }
+  (function loadMarks() {
+    try {
+      const raw = localStorage.getItem(MARKS_KEY);
+      if (!raw) return;
+      const bin = atob(raw), bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const f = new Int16Array(bytes.buffer, 0, Math.floor(bytes.length / 2));
+      for (let i = 0; i + 6 < f.length && marks.length < MARK_MAX; i += 7) marks.push({ x: f[i] / 1000, y: f[i + 1] / 1000, z: f[i + 2] / 1000, nx: f[i + 3] / 1000, ny: f[i + 4] / 1000, nz: f[i + 5] / 1000, c: f[i + 6] });
+      rebuildMarks();
+    } catch (e) { /* ignore */ }
+  })();
+
+  let scribbling = false, scribbleLast = null, scribbleSound = 0;
+  const _sn = new T.Vector3();
+  function scribbleStep(dt) {
+    if (!hand.n) { scribbling = false; return; }
+    raycaster.setFromCamera(locked ? CENTER : mouseNDC, camera);
+    raycaster.camera = camera;
+    raycaster.far = 6;
+    const targets = scene.children.filter(o => o !== crayonMesh && o !== storedMesh && o !== markMesh && o !== camera && !o.isLight && o !== hiddenGroup);
+    const hit = raycaster.intersectObjects(targets, true).find(h => h.face && !h.object.isSprite);
+    raycaster.far = Infinity;
+    if (!hit) { scribbleLast = null; return; }
+    _sn.copy(hit.face.normal).transformDirection(hit.object.matrixWorld);
+    if (_sn.dot(raycaster.ray.direction) > 0) _sn.negate();
+    const p = hit.point;
+    if (scribbleLast && scribbleLast.p.distanceTo(p) < 0.6 && scribbleLast.n.dot(_sn) > 0.9) {
+      const d = scribbleLast.p.distanceTo(p), steps = Math.min(40, Math.ceil(d / 0.012));
+      for (let k = 1; k <= steps; k++) addMark(scribbleLast.p.clone().lerp(p, k / steps), _sn, hand.c);
+    } else addMark(p, _sn, hand.c);
+    scribbleLast = { p: p.clone(), n: _sn.clone() };
+    scribbleSound -= dt;
+    if (scribbleSound <= 0) { scribbleSound = 0.12; blip(90 + Math.random() * 60, 0.05, 'sawtooth', 0.012); }
+  }
+  function startScribble() {
+    if (!hand.n) { toast('Pick up a crayon, then hold V to color with it.'); return; }
+    scribbling = true; scribbleLast = null;
+  }
+  function stopScribble() {
+    if (!scribbling) return;
+    scribbling = false; scribbleLast = null;
+    saveMarks();
+  }
+
 
   // ---------------------------------------------------------------------------
   // Other buttons
@@ -2586,7 +2804,9 @@
     $('btnReset').textContent = 'Reset all progress';
     try { localStorage.removeItem(SAVE_KEY); } catch (e) { /* ignore */ }
     clearWorld();
+    clearMarks();
     newGame();
+    refreshTableSheets();
     save();
     toast('Fresh room, fresh mountain of crayons.');
   };
@@ -2796,6 +3016,7 @@
     state.decor.forEach(d => d.update && d.update(time));
     updateDrawers(dt);
     if (storedDirty) rebuildStored();
+    if (scribbling && !anyModal()) scribbleStep(dt);
 
 
     if (matDirty) { crayonMesh.instanceMatrix.needsUpdate = true; matDirty = false; }
@@ -2834,6 +3055,6 @@
   // Exposed for debugging in the console
   window.craySorting = {
     get state() { return state; }, get crayons() { return cr; }, get aim() { return aim; },
-    player, SHADES, save, act, pickUp, tossToBox, takeFromBox, refreshBox, hand, camera,
+    player, SHADES, save, act, pickUp, tossToBox, takeFromBox, refreshBox, hand, camera, coloring, get marks() { return marks; },
   };
 })();
