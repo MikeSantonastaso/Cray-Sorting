@@ -320,3 +320,21 @@ button.primary kbd { background: rgba(255,255,255,.25); color: #fff; border-colo
   kbd { display: none; }
 }
 .credit { font-size: 12px; color: var(--muted); }
+
+/* Coloring books */
+.coloring-body { padding: 0 16px 16px; display: grid; gap: 10px; overflow: auto; }
+.color-pages { display: flex; gap: 6px; flex-wrap: wrap; }
+.color-pages button { padding: 6px 10px; font-size: 13px; }
+#colorCanvas { width: 100%; max-height: 52vh; object-fit: contain; aspect-ratio: 4 / 3; background: #fffdf6; border: 2px solid var(--line); border-radius: 12px; touch-action: none; cursor: crosshair; }
+.color-tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.color-tools .current { flex: 1; min-width: 160px; font-size: 14px; color: var(--muted); }
+.color-tools .current b { color: var(--ink); }
+.color-tools button { padding: 6px 10px; font-size: 13px; }
+.color-palette { display: flex; flex-wrap: wrap; gap: 3px; }
+.crayon-pick { width: 22px; height: 60px; padding: 0; border: none; background: none; display: flex; flex-direction: column; align-items: center; transition: transform .12s; }
+.crayon-pick .tip { width: 0; height: 0; border-left: 7px solid transparent; border-right: 7px solid transparent; border-bottom: 13px solid var(--c); }
+.crayon-pick .stick { width: 15px; flex: 1; border-radius: 2px 2px 4px 4px; background: linear-gradient(var(--c) 0 18%, rgba(0,0,0,.45) 18% 22%, var(--c) 22% 78%, rgba(0,0,0,.45) 78% 82%, var(--c) 82%); }
+.crayon-pick.active { transform: translateY(-8px); }
+.crayon-pick.locked { opacity: .22; }
+.crayon-pick:hover:not(.locked) { transform: translateY(-4px); }
+.crayon-pick.active:hover { transform: translateY(-8px); }

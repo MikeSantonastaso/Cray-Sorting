@@ -50,6 +50,14 @@
     clock:    { name: 'Wall Clock',         icon: '🕰️', r: 0.45, wall: true },
     window:   { name: 'Window',             icon: '🪟', r: 1.0,  wall: true },
     lights:   { name: 'Fairy Lights',       icon: '✨', r: 1.6,  wall: true },
+    // Everyday furniture: free from the start, move it around however you like
+    table:    { name: 'Coloring Table',     icon: '🖍️', r: 0.85, cy: 0.55, free: true, desc: 'Comes with coloring books. Click it to color with the crayons you have sorted.' },
+    chair:    { name: 'Little Chair',       icon: '🪑', r: 0.32, cy: 0.4,  free: true },
+    sofa:     { name: 'Sofa',               icon: '🛋️', r: 1.0,  cy: 0.45, free: true },
+    armchair: { name: 'Armchair',           icon: '💺', r: 0.55, cy: 0.45, free: true },
+    bookcase: { name: 'Bookcase',           icon: '📚', r: 0.65, cy: 0.9,  free: true },
+    toychest: { name: 'Toy Chest',          icon: '🧸', r: 0.55, cy: 0.35, free: true },
+    sidetable:{ name: 'Side Table',         icon: '🫖', r: 0.32, cy: 0.35, free: true },
   };
 
   // Upgrades. Their level is how many of their rewards you've unlocked.
@@ -115,6 +123,7 @@
       sorted: 0,
       familySorted: FAMILIES.map(() => 0), // crayons of each family sitting in boxes right now
       familyBest: FAMILIES.map(() => 0),   // the most ever sorted at once (unlocks never go away)
+      shadeSorted: SHADES.map(() => 0),   // every crayon ever sorted, per shade (unlocks coloring colors)
       boxes: [],
       decor: [],
       player: { x: 0, z: 10, yaw: 0, pitch: -0.3 },
@@ -1118,6 +1127,94 @@
         update = t => bulbs.forEach((m, i) => { m.emissiveIntensity = 0.45 + 0.45 * Math.sin(t * 3 + i * 1.7); });
         break;
       }
+      case 'table': {
+        // a low craft table with an open coloring book and a cup of crayons
+        const top = std(0xf6d38b, { roughness: 0.6 });
+        g.add(mesh(new T.BoxGeometry(1.6, 0.06, 1.0), top, 0, 0.6, 0));
+        g.add(mesh(new T.BoxGeometry(1.64, 0.04, 1.04), std(0x7fbf9b), 0, 0.565, 0));
+        for (const [x, z] of [[-0.7, -0.4], [0.7, -0.4], [-0.7, 0.4], [0.7, 0.4]]) g.add(mesh(new T.CylinderGeometry(0.04, 0.035, 0.56, 10), std(0x7fbf9b), x, 0.28, z));
+        const pages = new T.Mesh(new T.PlaneGeometry(1.1, 0.415), new T.MeshStandardMaterial({ map: bookTex, roughness: 0.9 }));
+        pages.rotation.x = -Math.PI / 2;
+        pages.position.set(-0.1, 0.645, 0.08);
+        g.add(pages);
+        g.add(mesh(new T.BoxGeometry(1.15, 0.012, 0.46), std(0xd7263d), -0.1, 0.636, 0.08, false));
+        const cup = mesh(new T.CylinderGeometry(0.08, 0.07, 0.16, 14, 1, true), std(0x6a8fd6, { side: T.DoubleSide }), 0.6, 0.71, -0.25);
+        g.add(cup);
+        COLOR_STARTERS.concat([13, 19]).forEach((c, i) => {
+          const m = new T.Mesh(crayonGeo, shadeMats[c]);
+          m.rotation.set((i - 2) * 0.12, i, Math.PI / 2 - 0.1 * (i % 2));
+          m.position.set(0.6 + Math.cos(i * 1.3) * 0.03, 0.78, -0.25 + Math.sin(i * 1.3) * 0.03);
+          g.add(m);
+        });
+        [[4, 0.45, 0.3, 0.4], [10, 0.25, 0.32, -0.9]].forEach(([c, x, z, ry]) => {
+          const m = new T.Mesh(crayonGeo, shadeMats[c]);
+          m.position.set(x, 0.665, z); m.rotation.y = ry;
+          g.add(m);
+        });
+        break;
+      }
+      case 'chair': {
+        const col = [0xe88a8a, 0x7fbfe0, 0xf2c14e, 0x9ccf8a][Math.abs(Math.round(d.x * 3 + d.z * 7)) % 4];
+        const m = std(col, { roughness: 0.6 });
+        g.add(mesh(new T.BoxGeometry(0.42, 0.05, 0.42), m, 0, 0.36, 0));
+        g.add(mesh(new T.BoxGeometry(0.42, 0.4, 0.05), m, 0, 0.6, -0.19));
+        for (const [x, z] of [[-0.18, -0.18], [0.18, -0.18], [-0.18, 0.18], [0.18, 0.18]]) g.add(mesh(new T.CylinderGeometry(0.022, 0.022, 0.36, 8), std(0xa8703f), x, 0.18, z));
+        break;
+      }
+      case 'sofa': {
+        const fab = std(0x5aa3a0, { roughness: 0.95 }), fab2 = std(0x6fb9b5, { roughness: 0.95 });
+        g.add(mesh(new T.BoxGeometry(2.0, 0.3, 0.9), fab, 0, 0.25, 0));
+        for (const x of [-0.47, 0.47]) g.add(mesh(new T.BoxGeometry(0.9, 0.14, 0.72), fab2, x, 0.47, 0.06));
+        g.add(mesh(new T.BoxGeometry(2.0, 0.55, 0.2), fab, 0, 0.62, -0.35));
+        for (const x of [-0.95, 0.95]) g.add(mesh(new T.BoxGeometry(0.2, 0.5, 0.9), fab, x, 0.4, 0));
+        for (const x of [-0.85, 0.85]) for (const z of [-0.35, 0.35]) g.add(mesh(new T.CylinderGeometry(0.03, 0.02, 0.1, 8), std(0x5b4636), x, 0.05, z));
+        g.add(mesh(new T.BoxGeometry(0.36, 0.3, 0.12), std(0xf6b7a8, { roughness: 1 }), -0.6, 0.66, -0.2));
+        break;
+      }
+      case 'armchair': {
+        const fab = std(0xe0a83c, { roughness: 0.95 });
+        g.add(mesh(new T.BoxGeometry(0.95, 0.3, 0.85), fab, 0, 0.25, 0));
+        g.add(mesh(new T.BoxGeometry(0.62, 0.14, 0.66), std(0xeebc5a, { roughness: 0.95 }), 0, 0.47, 0.06));
+        g.add(mesh(new T.BoxGeometry(0.95, 0.6, 0.2), fab, 0, 0.65, -0.33));
+        for (const x of [-0.4, 0.4]) g.add(mesh(new T.BoxGeometry(0.16, 0.48, 0.85), fab, x, 0.4, 0));
+        break;
+      }
+      case 'bookcase': {
+        const wood = std(0xc28a5a, { roughness: 0.7 });
+        g.add(mesh(new T.BoxGeometry(1.3, 1.85, 0.04), wood, 0, 0.925, -0.18));
+        for (const x of [-0.63, 0.63]) g.add(mesh(new T.BoxGeometry(0.04, 1.85, 0.4), wood, x, 0.925, 0));
+        const cols = [0xd7263d, 0x1e6fd9, 0xf2c14e, 0x2e9e4f, 0x8e44ad, 0xff8c1a, 0x00b3a4, 0xe05aa8];
+        for (let k = 0; k < 4; k++) {
+          const y = 0.04 + k * 0.6;
+          g.add(mesh(new T.BoxGeometry(1.26, 0.04, 0.38), wood, 0, Math.min(y, 1.83), 0));
+          if (k === 3) break;
+          let x = -0.56, i = k * 5;
+          while (x < 0.5) {
+            const w = 0.06 + ((i * 37) % 5) * 0.012, h = 0.3 + ((i * 53) % 4) * 0.04;
+            g.add(mesh(new T.BoxGeometry(w, h, 0.26), std(cols[i % cols.length], { roughness: 0.8 }), x + w / 2, y + 0.02 + h / 2, 0.02, false));
+            x += w + 0.01; i++;
+            if (i % 7 === 3) x += 0.12;
+          }
+        }
+        break;
+      }
+      case 'toychest': {
+        const body = std(0xd9534f, { roughness: 0.7 });
+        g.add(mesh(new T.BoxGeometry(1.0, 0.5, 0.55), body, 0, 0.25, 0));
+        g.add(mesh(new T.BoxGeometry(1.04, 0.08, 0.59), std(0xf2c14e), 0, 0.53, 0));
+        g.add(mesh(new T.BoxGeometry(1.01, 0.08, 0.56), std(0xffffff), 0, 0.3, 0, false));
+        g.add(mesh(new T.SphereGeometry(0.12, 14, 10), std(0xb07a4a, { roughness: 1 }), 0.25, 0.68, 0));
+        g.add(mesh(new T.SphereGeometry(0.09, 14, 10), std(0xb07a4a, { roughness: 1 }), 0.25, 0.85, 0));
+        for (const x of [0.18, 0.32]) g.add(mesh(new T.SphereGeometry(0.035, 8, 6), std(0xb07a4a, { roughness: 1 }), x, 0.93, 0));
+        break;
+      }
+      case 'sidetable': {
+        g.add(mesh(new T.CylinderGeometry(0.3, 0.3, 0.04, 24), std(0xc28a5a), 0, 0.55, 0));
+        g.add(mesh(new T.CylinderGeometry(0.04, 0.05, 0.53, 10), std(0x8a5a35), 0, 0.27, 0));
+        g.add(mesh(new T.CylinderGeometry(0.18, 0.2, 0.03, 20), std(0x8a5a35), 0, 0.015, 0));
+        g.add(mesh(new T.CylinderGeometry(0.06, 0.05, 0.12, 14), std(0xfff7ea), 0.08, 0.63, 0.04));
+        break;
+      }
     }
     d.group = g;
     d.update = update;
@@ -1167,6 +1264,13 @@
       if (ox > 0 && oz > 0) {
         if (ox < oz) player.x += Math.sign(dx || 1) * ox; else player.z += Math.sign(dz || 1) * oz;
       }
+    }
+    // and around furniture
+    for (const d of state.decor) {
+      const def = DECOR[d.type];
+      if (def.wall || def.under || (placing && placing.obj === d)) continue;
+      const dx = player.x - d.x, dz = player.z - d.z, l = Math.hypot(dx, dz), min = def.r * 0.85 + 0.25;
+      if (l < min && l > 1e-4) { player.x = d.x + dx / l * min; player.z = d.z + dz / l * min; }
     }
     // wade up onto piles a little
     const target = 1.65 + Math.min(4.6, topAt(player.x, player.z, 0.35)) * 0.92;
@@ -1702,6 +1806,7 @@
     const fi = SHADES[c].family;
     state.sorted++;
     state.familySorted[fi]++;
+    state.shadeSorted[c]++;
     if (show) floatAcc++;
     const n = state.familySorted[fi];
     const ti = n > state.familyBest[fi] ? TIERS.indexOf(n) : -1;
@@ -1811,7 +1916,7 @@
         : (b.count ? 'click to take some out · ' : '') + (full && dr ? 'full, stack another on top · ' : '') + 'G move' + (b.count === 0 ? ' · C change shade' : '');
       html = `${sw(s.hex)}<b>${s.name}</b> ${dr ? 'drawer' : 'box'} ${b.count}/${capOf(b)} <span class="dim">· ${what}</span>`;
     } else if (aim.type === 'decor') {
-      html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
+      html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· ${aim.obj.type === 'table' && !hand.n ? 'click to color · ' : ''}G move</span>`;
     } else if (aim.type === 'floor') {
       if (hand.n && aim.t < 9) html = '<span class="dim">click to drop here</span>';
       else if (aim.rug && aim.t < 8) html = '<b>Cozy Rug</b> <span class="dim">· G move</span>';
@@ -1875,10 +1980,12 @@
       if (aim.type === 'crayon' && aim.obj.c === hand.c) pickUp(aim.obj);
       else if (aim.type === 'box') tossToBox(aim.obj);
       else if (aim.type === 'floor' && aim.t < 9) dropAt(aim.point);
+      else if (aim.type === 'decor' && aim.obj.type === 'table') toast('Put your crayons away first, then sit down to color.');
       else if (aim.type === 'decor') toast('Toss crayons into a box, or click the floor to drop them.');
       return;
     }
     if (aim.type === 'crayon') pickUp(aim.obj);
+    else if (aim.type === 'decor' && aim.obj.type === 'table') openColoring();
     else if (aim.type === 'box' && !isDrawer(aim.obj) && aim.obj.count >= capacity() && !lvl('autoPack')) packBox(aim.obj);
     else if (aim.type === 'box') takeFromBox(aim.obj);
   }
@@ -2049,7 +2156,7 @@
         list.appendChild(row);
       });
     } else if (shopTab === 'furniture') {
-      Object.entries(DECOR).forEach(([type, def]) => {
+      Object.entries(DECOR).sort((a, b) => (b[1].free ? 1 : 0) - (a[1].free ? 1 : 0)).forEach(([type, def]) => {
         const open = unlockedDecor.has(type);
         const el = document.createElement('div');
         el.className = 'item' + (open ? '' : ' locked');
@@ -2126,6 +2233,245 @@
   }
 
   // ---------------------------------------------------------------------------
+  // Coloring books: color line-art pages with the shades you've sorted
+  // ---------------------------------------------------------------------------
+  const COLOR_KEY = 'cray-sorting-coloring-v1';
+  const COLOR_STARTERS = [1, 4, 7]; // Cherry, Ocean, Sunshine come in the cup on the table
+  const PAGE_W = 640, PAGE_H = 480;
+  const line = (g, w = 6) => { g.strokeStyle = '#222'; g.lineWidth = w; g.lineCap = 'round'; g.lineJoin = 'round'; };
+  const circle = (g, x, y, r) => { g.beginPath(); g.arc(x, y, r, 0, TAU); g.stroke(); };
+  const ellipse = (g, x, y, rx, ry, rot = 0) => { g.beginPath(); g.ellipse(x, y, rx, ry, rot, 0, TAU); g.stroke(); };
+  const poly = (g, pts, close = true) => { g.beginPath(); pts.forEach(([x, y], i) => i ? g.lineTo(x, y) : g.moveTo(x, y)); if (close) g.closePath(); g.stroke(); };
+  const PAGES = [
+    { name: 'Sleepy Cat', draw: g => {
+      line(g);
+      ellipse(g, 330, 330, 170, 95);                       // body
+      circle(g, 200, 230, 80);                             // head
+      poly(g, [[140, 185], [150, 110], [195, 155]]); poly(g, [[205, 150], [250, 105], [262, 180]]);
+      g.beginPath(); g.moveTo(170, 230); g.quadraticCurveTo(180, 240, 190, 230); g.moveTo(215, 230); g.quadraticCurveTo(225, 240, 235, 230); g.stroke();
+      poly(g, [[196, 252], [210, 252], [203, 262]]);
+      g.beginPath(); g.moveTo(490, 330); g.bezierCurveTo(600, 300, 590, 420, 500, 400); g.stroke(); // tail
+      ellipse(g, 300, 420, 60, 18); ellipse(g, 400, 420, 60, 18);
+      line(g, 4); for (const [x1, y1, x2, y2] of [[150, 255, 95, 245], [150, 265, 95, 275], [255, 255, 310, 245], [255, 265, 310, 275]]) { g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); }
+      line(g, 5); for (let i = 0; i < 3; i++) { g.beginPath(); g.moveTo(330 + i * 45, 250); g.quadraticCurveTo(345 + i * 45, 290, 330 + i * 45, 320); g.stroke(); }
+      g.font = 'bold 34px "Trebuchet MS", sans-serif'; g.fillStyle = '#222'; g.fillText('z', 300, 150); g.fillText('z', 330, 115); g.fillText('Z', 365, 80);
+    } },
+    { name: 'Cozy House', draw: g => {
+      line(g);
+      g.strokeRect(170, 220, 300, 200);
+      poly(g, [[140, 230], [320, 90], [500, 230]]);
+      g.strokeRect(290, 320, 60, 100);
+      g.strokeRect(200, 260, 60, 55); g.strokeRect(380, 260, 60, 55);
+      g.beginPath(); g.moveTo(230, 260); g.lineTo(230, 315); g.moveTo(200, 287); g.lineTo(260, 287); g.moveTo(410, 260); g.lineTo(410, 315); g.moveTo(380, 287); g.lineTo(440, 287); g.stroke();
+      g.strokeRect(410, 110, 40, 70);
+      circle(g, 560, 80, 40);
+      for (let a = 0; a < 8; a++) { g.beginPath(); g.moveTo(560 + Math.cos(a * 0.785) * 52, 80 + Math.sin(a * 0.785) * 52); g.lineTo(560 + Math.cos(a * 0.785) * 72, 80 + Math.sin(a * 0.785) * 72); g.stroke(); }
+      g.beginPath(); g.moveTo(10, 440); g.quadraticCurveTo(320, 405, 630, 440); g.stroke();
+      ellipse(g, 70, 300, 45, 70); g.beginPath(); g.moveTo(70, 370); g.lineTo(70, 430); g.stroke();
+      ellipse(g, 120, 90, 60, 25); ellipse(g, 170, 80, 45, 22);
+    } },
+    { name: 'Goldfish Friends', draw: g => {
+      line(g);
+      const fish = (x, y, s, flip) => {
+        g.save(); g.translate(x, y); g.scale(flip ? -s : s, s);
+        ellipse(g, 0, 0, 90, 55);
+        poly(g, [[85, 0], [150, -50], [150, 50]]);
+        poly(g, [[-10, -50], [20, -95], [40, -48]]);
+        circle(g, -50, -12, 10);
+        g.beginPath(); g.arc(-20, 0, 40, -0.9, 0.9); g.stroke();
+        g.restore();
+      };
+      fish(220, 200, 1, false); fish(470, 330, 0.8, true);
+      for (const [x, y, r] of [[120, 120, 14], [100, 80, 10], [90, 45, 7], [560, 200, 12], [575, 160, 8]]) circle(g, x, y, r);
+      for (const x of [60, 330, 600]) { g.beginPath(); g.moveTo(x, 470); g.bezierCurveTo(x - 30, 420, x + 30, 380, x, 330); g.stroke(); }
+      g.beginPath(); g.moveTo(0, 470); g.lineTo(640, 470); g.stroke();
+    } },
+    { name: 'Rocket Trip', draw: g => {
+      line(g);
+      g.beginPath(); g.moveTo(320, 50); g.bezierCurveTo(400, 120, 400, 260, 380, 340); g.lineTo(260, 340); g.bezierCurveTo(240, 260, 240, 120, 320, 50); g.stroke();
+      circle(g, 320, 180, 38); circle(g, 320, 180, 26);
+      poly(g, [[262, 270], [210, 360], [265, 340]]); poly(g, [[378, 270], [430, 360], [375, 340]]);
+      poly(g, [[280, 340], [300, 410], [320, 370], [340, 410], [360, 340]], false);
+      circle(g, 110, 120, 55); ellipse(g, 110, 120, 95, 20, -0.3);
+      const star = (x, y, r) => { const pts = []; for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.45 : r; pts.push([x + Math.cos(a) * rr, y + Math.sin(a) * rr]); } poly(g, pts); };
+      star(520, 100, 32); star(560, 330, 24); star(90, 380, 26); star(470, 230, 16);
+      g.beginPath(); g.arc(560, 210, 40, 0.6 * Math.PI, 1.6 * Math.PI); g.arc(580, 200, 34, 1.5 * Math.PI, 0.7 * Math.PI, true); g.stroke();
+    } },
+    { name: 'Flower Garden', draw: g => {
+      line(g);
+      const flower = (x, y, r, petals) => {
+        g.beginPath(); g.moveTo(x, y + r); g.quadraticCurveTo(x - 15, y + 140, x, 450); g.stroke();
+        ellipse(g, x - 35, y + r + 80, 30, 12, -0.5);
+        for (let i = 0; i < petals; i++) { const a = i * TAU / petals; ellipse(g, x + Math.cos(a) * r * 1.5, y + Math.sin(a) * r * 1.5, r * 0.9, r * 0.55, a); }
+        circle(g, x, y, r * 0.8);
+      };
+      flower(150, 190, 34, 6); flower(330, 140, 40, 8); flower(510, 210, 30, 5);
+      g.beginPath(); g.moveTo(0, 450); g.lineTo(640, 450); g.stroke();
+      // a butterfly
+      ellipse(g, 450, 70, 30, 22, -0.5); ellipse(g, 492, 70, 30, 22, 0.5); ellipse(g, 455, 108, 22, 15, 0.4); ellipse(g, 488, 108, 22, 15, -0.4);
+      g.beginPath(); g.moveTo(471, 60); g.lineTo(471, 120); g.moveTo(471, 60); g.lineTo(455, 35); g.moveTo(471, 60); g.lineTo(487, 35); g.stroke();
+    } },
+  ];
+
+  const coloring = { page: 0, pages: PAGES.map(() => null), color: COLOR_STARTERS[0], size: 14, eraser: false, loaded: false };
+  const paintCanvases = PAGES.map(() => { const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H; return c; });
+  const lineCanvases = PAGES.map(pg => {
+    const c = document.createElement('canvas'); c.width = PAGE_W; c.height = PAGE_H;
+    pg.draw(c.getContext('2d'));
+    return c;
+  });
+  function loadColoring() {
+    if (coloring.loaded) return;
+    coloring.loaded = true;
+    try {
+      const s = JSON.parse(localStorage.getItem(COLOR_KEY) || 'null');
+      if (!s) return;
+      coloring.page = clamp(s.page || 0, 0, PAGES.length - 1);
+      (s.pages || []).forEach((url, i) => {
+        if (!url || !paintCanvases[i]) return;
+        const img = new Image();
+        img.onload = () => { paintCanvases[i].getContext('2d').drawImage(img, 0, 0); drawColoringView(); updateBookTex(); };
+        img.src = url;
+      });
+    } catch (e) { /* ignore */ }
+  }
+  function saveColoring() {
+    try {
+      const pages = paintCanvases.map(c => (c.dirty || c.hasPaint) ? c.toDataURL('image/png') : null);
+      localStorage.setItem(COLOR_KEY, JSON.stringify({ page: coloring.page, pages }));
+    } catch (e) { /* storage may be full */ }
+  }
+
+  // The open book on every coloring table shows the page you're working on
+  const bookCanvas = document.createElement('canvas');
+  bookCanvas.width = 1024; bookCanvas.height = 386;
+  const bookTex = new T.CanvasTexture(bookCanvas);
+  bookTex.anisotropy = 4;
+  function updateBookTex() {
+    const g = bookCanvas.getContext('2d');
+    g.fillStyle = '#fffdf6'; g.fillRect(0, 0, 1024, 386);
+    g.fillStyle = '#f1e9d8'; g.fillRect(500, 0, 24, 386);
+    g.fillStyle = '#3a2e2a'; g.textAlign = 'center';
+    g.font = 'bold 40px "Trebuchet MS", sans-serif';
+    g.fillText('Coloring Book', 250, 150);
+    g.font = '30px "Trebuchet MS", sans-serif';
+    g.fillText(PAGES[coloring.page].name, 250, 210);
+    SHADES.forEach((s, i) => { if (i % 3 === 1) { g.fillStyle = s.hex; g.fillRect(80 + (i / 3 | 0) * 34, 260, 24, 60); } });
+    g.drawImage(paintCanvases[coloring.page], 532, 12, 480, 360);
+    g.drawImage(lineCanvases[coloring.page], 532, 12, 480, 360);
+    bookTex.needsUpdate = true;
+  }
+
+  const colorView = $('colorCanvas');
+  const cvx = colorView.getContext('2d');
+  function drawColoringView() {
+    cvx.fillStyle = '#fffdf6'; cvx.fillRect(0, 0, PAGE_W, PAGE_H);
+    cvx.drawImage(paintCanvases[coloring.page], 0, 0);
+    cvx.drawImage(lineCanvases[coloring.page], 0, 0);
+  }
+  const shadeUnlocked = i => COLOR_STARTERS.includes(i) || state.shadeSorted[i] > 0;
+
+  function renderColoringUI() {
+    $('colorPages').innerHTML = '';
+    PAGES.forEach((pg, i) => {
+      const b = document.createElement('button');
+      b.textContent = pg.name;
+      b.className = i === coloring.page ? 'active' : '';
+      b.onclick = () => { coloring.page = i; renderColoringUI(); drawColoringView(); updateBookTex(); };
+      $('colorPages').appendChild(b);
+    });
+    const pal = $('colorPalette');
+    pal.innerHTML = '';
+    let have = 0;
+    SHADES.forEach((s, i) => {
+      const open = shadeUnlocked(i);
+      if (open) have++;
+      const b = document.createElement('button');
+      b.className = 'crayon-pick' + (open ? '' : ' locked') + (!coloring.eraser && coloring.color === i ? ' active' : '');
+      b.style.setProperty('--c', s.hex);
+      b.title = open ? s.name : `${s.name}: sort one to color with it`;
+      b.innerHTML = `<span class="tip"></span><span class="stick"></span>`;
+      b.onclick = () => {
+        if (!open) { toast(`Sort a ${s.name} crayon to color with it.`); return; }
+        coloring.color = i; coloring.eraser = false; renderColoringUI();
+      };
+      pal.appendChild(b);
+    });
+    $('colorNote').textContent = have < SHADES.length
+      ? `${have} of ${SHADES.length} shades. Sort a crayon of any shade to add it to your coloring box.`
+      : 'You have every shade. Go wild!';
+    document.querySelectorAll('#colorTools [data-size]').forEach(b => b.classList.toggle('active', !coloring.eraser && +b.dataset.size === coloring.size));
+    $('colorEraser').classList.toggle('active', coloring.eraser);
+    $('colorCurrent').textContent = coloring.eraser ? 'Eraser' : SHADES[coloring.color].name;
+  }
+
+  function openColoring() {
+    loadColoring();
+    if (locked) document.exitPointerLock();
+    if (!shadeUnlocked(coloring.color)) coloring.color = COLOR_STARTERS[0];
+    renderColoringUI();
+    drawColoringView();
+    $('coloring').hidden = false;
+  }
+
+  // Waxy crayon strokes: lots of tiny grains, so it looks drawn rather than painted
+  function crayonDab(g, x, y, r) {
+    const n = Math.ceil(r * 1.6);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * r;
+      g.globalAlpha = 0.35 + Math.random() * 0.4;
+      g.fillRect(x + Math.cos(a) * d, y + Math.sin(a) * d, 2.2, 2.2);
+    }
+    g.globalAlpha = 1;
+  }
+  let stroke = null;
+  function strokeTo(x, y) {
+    const c = paintCanvases[coloring.page], g = c.getContext('2d');
+    const r = coloring.eraser ? coloring.size * 1.4 : coloring.size / 2;
+    g.save();
+    if (coloring.eraser) g.globalCompositeOperation = 'destination-out';
+    g.fillStyle = coloring.eraser ? '#000' : SHADES[coloring.color].hex;
+    const [px, py] = stroke.last || [x, y];
+    const dist = Math.hypot(x - px, y - py), steps = Math.max(1, Math.ceil(dist / Math.max(1.5, r / 3)));
+    for (let k = 1; k <= steps; k++) {
+      const t = k / steps, xx = px + (x - px) * t, yy = py + (y - py) * t;
+      if (coloring.eraser) { g.beginPath(); g.arc(xx, yy, r, 0, TAU); g.fill(); } else crayonDab(g, xx, yy, r);
+    }
+    g.restore();
+    c.hasPaint = true;
+    stroke.last = [x, y];
+    if (!viewQueued) { viewQueued = true; requestAnimationFrame(() => { viewQueued = false; drawColoringView(); }); }
+  }
+  let viewQueued = false;
+  const pagePoint = e => {
+    const rc = colorView.getBoundingClientRect();
+    return [(e.clientX - rc.left) / rc.width * PAGE_W, (e.clientY - rc.top) / rc.height * PAGE_H];
+  };
+  colorView.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    colorView.setPointerCapture(e.pointerId);
+    stroke = { id: e.pointerId, last: null };
+    strokeTo(...pagePoint(e));
+  });
+  colorView.addEventListener('pointermove', e => { if (stroke && stroke.id === e.pointerId) strokeTo(...pagePoint(e)); });
+  const endStroke = () => { if (!stroke) return; stroke = null; updateBookTex(); saveColoring(); };
+  colorView.addEventListener('pointerup', endStroke);
+  colorView.addEventListener('pointercancel', endStroke);
+  document.querySelectorAll('#colorTools [data-size]').forEach(b => { b.onclick = () => { coloring.size = +b.dataset.size; coloring.eraser = false; renderColoringUI(); }; });
+  $('colorEraser').onclick = () => { coloring.eraser = !coloring.eraser; renderColoringUI(); };
+  let clearArmed = 0;
+  $('colorClear').onclick = () => {
+    if (Date.now() - clearArmed > 3000) { clearArmed = Date.now(); $('colorClear').textContent = 'Click again to clear'; setTimeout(() => { $('colorClear').textContent = '🧽 Clear page'; }, 3000); return; }
+    clearArmed = 0; $('colorClear').textContent = '🧽 Clear page';
+    const c = paintCanvases[coloring.page];
+    c.getContext('2d').clearRect(0, 0, PAGE_W, PAGE_H);
+    c.hasPaint = false; c.dirty = true;
+    drawColoringView(); updateBookTex(); saveColoring();
+  };
+  updateBookTex();
+  setTimeout(loadColoring, 0);
+
+  // ---------------------------------------------------------------------------
   // Other buttons
   // ---------------------------------------------------------------------------
   $('btnCollection').onclick = () => openShop('collection');
@@ -2177,7 +2523,7 @@
       flights.forEach(f => loose.push(f.c));
       bots.forEach(b => b.carry.forEach(c => loose.push(c)));
       const s = {
-        sorted: state.sorted, familySorted: state.familySorted, familyBest: state.familyBest, done: state.done,
+        sorted: state.sorted, familySorted: state.familySorted, familyBest: state.familyBest, shadeSorted: state.shadeSorted, done: state.done,
         boxes: state.boxes.map(({ x, z, rot, color, count, packed, kind, level }) => ({ x, z, rot, color, count, packed, kind, level })),
         decor: state.decor.map(({ type, x, y, z, ry, packed }) => ({ type, x, y, z, ry, packed })),
         player: { x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch },
@@ -2220,6 +2566,13 @@
       state.decor.push(d);
       buildDecor(d);
     });
+    // a little furniture to start with; move it with G or add more from E → Furniture
+    [['table', -8.6, 7.2, 0.3], ['chair', -8.4, 8.3, Math.PI + 0.3], ['chair', -9.2, 6.2, -0.4],
+     ['sofa', 9.6, 8.2, -Math.PI / 2], ['sidetable', 9.8, 6.6, 0], ['bookcase', -11.5, 0, Math.PI / 2]].forEach(([type, x, z, ry]) => {
+      const d = { type, x, y: 0, z, ry, packed: [] };
+      state.decor.push(d);
+      buildDecor(d);
+    });
     // An absurd amount of crayons covering every bit of floor, drifted into heaps.
     // Every crayon is a random shade, so there's no pre-sorting anywhere.
     const heaps = [[-6, -6, 3.5], [5, -7, 3], [-1, -1, 3.2], [7.5, 2, 2.6], [-8, 3.5, 2.4], [1, 4.5, 2], [-4, 8, 1.6], [9, -1.5, 1.8]];
@@ -2249,12 +2602,15 @@
           sorted: s.sorted || 0, done: !!s.done,
           familySorted: FAMILIES.map((_, i) => (s.familySorted && s.familySorted[i]) || 0),
           familyBest: FAMILIES.map((_, i) => Math.max((s.familyBest && s.familyBest[i]) || 0, (s.familySorted && s.familySorted[i]) || 0)),
+          shadeSorted: SHADES.map((_, i) => (s.shadeSorted && s.shadeSorted[i]) || 0),
           player: s.player || state.player,
         });
         recomputeUnlocks();
         Object.assign(player, state.player);
         (s.boxes || []).forEach(b => { const o = addBox(b.x, b.z, b.color, b.rot || 0, b.count || 0, b.kind || 'box', b.level || 0); o.packed = b.packed || 0; });
         restack();
+        // older saves didn't track shades: count what's already in boxes
+        state.boxes.forEach(b => { state.shadeSorted[b.color] = Math.max(state.shadeSorted[b.color], b.count + (b.packed || 0) * capacity()); });
         (s.decor || []).forEach(d => {
           const o = { type: d.type, x: d.x, y: d.y || 0, z: d.z, ry: d.ry || 0, packed: d.packed || [] };
           state.decor.push(o);
@@ -2297,9 +2653,12 @@
     }
   }
 
+  const coloringEl = $('coloring');
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    // the room is hidden behind the coloring book, so give the page all the speed
+    if (!coloringEl.hidden) { requestAnimationFrame(frame); return; }
     time += dt;
 
     if (!anyModal()) updatePlayer(dt);

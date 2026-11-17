@@ -26,6 +26,7 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Collection (unlocks and progress) | `F` |
 | Move a box, drawer, shelf or decoration | Look at it and press `G`, then click to place (`R` rotates, `X` puts it away) |
 | Change an empty box's shade | Look at it and press `C` |
+| Color in a coloring book | Click a Coloring Table |
 
 On phones and tablets there's an on-screen joystick for walking; drag to look and tap to act.
 
@@ -35,6 +36,11 @@ On phones and tablets there's an on-screen joystick for walking; drag to look an
 - **Shelf units are free too.** When a box is full, click it to pack it onto the nearest shelf with room.
 - **Sorting drawers stack.** Pick Drawer in the Build menu: each one holds three boxes' worth and never needs packing. While placing a drawer, look at another drawer to stack it on top, up to 8 high. A starter tower sits between the shelves.
 - **Unlocks come from sorting.** Each color family has three milestones (30, 120 and 300 crayons sorted). They unlock upgrades (Bigger Handfuls, Wide Scoop, Shade Spotter, Roomier Boxes, Comfy Sneakers, Tape Gun, Sortbots, Sortbot Turbo) and furniture (plant, rug, lamp, beanbag, fish bowl, cat bed, poster, clock, window, fairy lights). The Collection screen shows what's next.
+
+## Furniture and coloring books
+
+- **Furniture is free and movable.** The room starts with a coloring table, two chairs, a sofa, a side table and a bookcase. Move anything with `G` and add more from E → Furniture: coloring tables, little chairs, sofas, armchairs, bookcases, toy chests and side tables.
+- **Coloring books.** Click a coloring table to open five line-art pages (Sleepy Cat, Cozy House, Goldfish Friends, Rocket Trip, Flower Garden). Draw with a waxy crayon brush in three sizes, or use the eraser. You start with Cherry, Ocean and Sunshine, and every shade you sort joins your coloring box. Your pages save in the browser, and the open book on the table shows the page you're working on.
 
 ## Files
 

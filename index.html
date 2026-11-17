@@ -63,6 +63,29 @@
     </div>
   </div>
 
+  <div id="coloring" class="modal" hidden>
+    <div class="card wide">
+      <div class="card-head">
+        <h2>🖍️ Coloring books</h2>
+        <button class="close" data-close="coloring">✕</button>
+      </div>
+      <div class="coloring-body">
+        <nav id="colorPages" class="color-pages"></nav>
+        <canvas id="colorCanvas" width="640" height="480"></canvas>
+        <div id="colorTools" class="color-tools">
+          <span class="current">Coloring with <b id="colorCurrent"></b></span>
+          <button data-size="8">Thin</button>
+          <button data-size="14">Medium</button>
+          <button data-size="26">Thick</button>
+          <button id="colorEraser">🩹 Eraser</button>
+          <button id="colorClear">🧽 Clear page</button>
+        </div>
+        <div id="colorPalette" class="color-palette"></div>
+        <p id="colorNote" class="tab-intro"></p>
+      </div>
+    </div>
+  </div>
+
   <div id="help" class="modal" hidden>
     <div class="card">
       <div class="card-head">
@@ -79,6 +102,7 @@
           <div><b>Click</b> the floor to drop crayons · <kbd>Q</kbd> drop at your feet</div>
           <div><b>Click</b> a full box to pack it onto the nearest shelf · drawers stack, so build towers</div>
           <div><kbd>E</kbd> build (free boxes for any shade, shelves, furniture) · <kbd>F</kbd> collection</div>
+          <div><b>Click</b> a coloring table to color with the shades you've sorted</div>
           <div><kbd>G</kbd> move what you're looking at · <kbd>R</kbd> rotate · <kbd>X</kbd> put away · <kbd>C</kbd> change an empty box's shade</div>
         </div>
         <p>Each crayon only counts in the box or drawer for its <b>exact</b> shade. Look at one to see its name. Boxes, stackable drawers and shelves are free, so lay the room out however you like. Sorting enough of a color unlocks upgrades and furniture: open the Collection to see what's next. Progress saves in this browser.</p>
