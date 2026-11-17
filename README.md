@@ -1,6 +1,6 @@
 # Cray Sorting
 
-A first-person 3D sorting game. You're standing in a room buried under 60,000 completely mixed-up crayons (30 shades across 10 color families) covering every inch of the floor. There are no waves and no timers: it's one huge, daunting job. Lay out your boxes and shelves however you like, toss each crayon into the box for its exact shade, and keep going until the floor is clean.
+A first-person 3D sorting game. You're standing in a cozy art room (wainscoting, sunny windows, a corkboard of crayon drawings) buried under 60,000 completely mixed-up crayons (30 shades across 10 color families) covering every inch of the floor. There are no waves and no timers: it's one huge, daunting job. Lay out your boxes and shelves however you like, toss each crayon into the box for its exact shade, and keep going until the floor is clean.
 
 ## How to run
 
@@ -19,6 +19,7 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Look around | Mouse (click **Mouse look** or press `L` to lock the cursor), or drag |
 | Pick up a crayon | Click it (look at a crayon to see its shade name) |
 | Toss into a box or drawer | Click it while holding crayons |
+| Take crayons back out | Click a box or drawer with empty hands, or press `T` (works on full boxes too) |
 | Drop crayons | Click the floor, or press `Q` |
 | Pack a full box | Click it. It goes onto the nearest shelf unit with room |
 | Build menu (free boxes, drawers, shelves, furniture) | `E` |
@@ -30,7 +31,7 @@ On phones and tablets there's an on-screen joystick for walking; drag to look an
 
 ## Organizing and unlocks
 
-- **Boxes are free.** Make a box for any shade, as many as you want, and place it anywhere. Six boxes are in the room when you start.
+- **Boxes are free.** Make a box for any shade, as many as you want, and place it anywhere. Six boxes are in the room when you start. Crayons you sort stand up in the box, tips out, and you can take them back out any time to reorganize. Unlocks you've earned stay unlocked.
 - **Shelf units are free too.** When a box is full, click it to pack it onto the nearest shelf with room.
 - **Sorting drawers stack.** Pick Drawer in the Build menu: each one holds three boxes' worth and never needs packing. While placing a drawer, look at another drawer to stack it on top, up to 8 high. A starter tower sits between the shelves.
 - **Unlocks come from sorting.** Each color family has three milestones (30, 120 and 300 crayons sorted). They unlock upgrades (Bigger Handfuls, Wide Scoop, Shade Spotter, Roomier Boxes, Comfy Sneakers, Tape Gun, Sortbots, Sortbot Turbo) and furniture (plant, rug, lamp, beanbag, fish bowl, cat bed, poster, clock, window, fairy lights). The Collection screen shows what's next.

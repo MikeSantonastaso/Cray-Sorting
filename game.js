@@ -113,7 +113,8 @@
   function freshState() {
     return {
       sorted: 0,
-      familySorted: FAMILIES.map(() => 0),
+      familySorted: FAMILIES.map(() => 0), // crayons of each family sitting in boxes right now
+      familyBest: FAMILIES.map(() => 0),   // the most ever sorted at once (unlocks never go away)
       boxes: [],
       decor: [],
       player: { x: 0, z: 10, yaw: 0, pitch: -0.3 },
@@ -125,7 +126,7 @@
   function earnedRewards() {
     const out = [];
     REWARDS.forEach((tiers, fi) => tiers.forEach((r, ti) => {
-      if (state.familySorted[fi] >= TIERS[ti]) out.push({ ...r, fi, ti });
+      if (state.familyBest[fi] >= TIERS[ti]) out.push({ ...r, fi, ti });
     }));
     return out;
   }
@@ -247,10 +248,192 @@
     ceil.rotation.x = Math.PI / 2;
     ceil.position.y = WALL_H;
     scene.add(ceil);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Room details: wainscoting, trim, windows, a door, beams, lamps, an art board
+  // ---------------------------------------------------------------------------
+  {
+    const trimMat = new T.MeshStandardMaterial({ color: 0xfff7ea, roughness: 0.6 });
+    const beamMat = new T.MeshStandardMaterial({ color: 0x9a6a42, roughness: 0.75 });
+    // add a part on a wall: (u along the wall, y up, out from the wall), sizes in the same frame
+    const WALLS = {
+      north: { ry: 0, at: (u, out) => [u, -HALF + out] },
+      south: { ry: Math.PI, at: (u, out) => [-u, HALF - out] },
+      west: { ry: Math.PI / 2, at: (u, out) => [-HALF + out, -u] },
+      east: { ry: -Math.PI / 2, at: (u, out) => [HALF - out, u] },
+    };
+    function part(wall, geo, mat, u, y, out, shadow = false) {
+      const w = WALLS[wall];
+      const m = new T.Mesh(geo, mat);
+      const [x, z] = w.at(u, out);
+      m.position.set(x, y, z);
+      m.rotation.y = w.ry;
+      m.castShadow = shadow; m.receiveShadow = true;
+      scene.add(m);
+      return m;
+    }
+    const box = (w, h, d) => new T.BoxGeometry(w, h, d);
+
+    // Wainscoting: painted boards on the lower wall, a chair rail, crown molding, and a crayon frieze
+    const wainTex = canvasTex(256, 128, (g, w, h) => {
+      g.fillStyle = '#b9cfb4'; g.fillRect(0, 0, w, h);
+      for (let x = 0; x < w; x += 32) {
+        g.fillStyle = 'rgba(60,90,60,.22)'; g.fillRect(x, 0, 3, h);
+        g.fillStyle = 'rgba(255,255,255,.25)'; g.fillRect(x + 3, 0, 2, h);
+      }
+    }, [HALF * 2 / 1.6, 1]);
+    const wainMat = new T.MeshStandardMaterial({ map: wainTex, roughness: 0.7 });
+    const friezeTex = canvasTex(1024, 64, (g, w, h) => {
+      g.fillStyle = '#fff4e2'; g.fillRect(0, 0, w, h);
+      const n = 16;
+      for (let i = 0; i < n; i++) {
+        const x = i * w / n + 6, len = w / n - 12, col = SHADES[(i * 7) % SHADES.length].hex;
+        g.fillStyle = col;
+        g.fillRect(x, 24, len - 14, 16);
+        g.beginPath(); g.moveTo(x + len - 14, 24); g.lineTo(x + len, 32); g.lineTo(x + len - 14, 40); g.fill();
+        g.fillStyle = 'rgba(0,0,0,.35)';
+        g.fillRect(x + 8, 24, 3, 16); g.fillRect(x + len - 34, 24, 3, 16);
+      }
+    }, [3, 1]);
+    const friezeMat = new T.MeshStandardMaterial({ map: friezeTex, roughness: 0.8 });
+    for (const wall of Object.keys(WALLS)) {
+      part(wall, box(HALF * 2, 1.2, 0.03), wainMat, 0, 0.6, 0.015);
+      part(wall, box(HALF * 2, 0.07, 0.07), trimMat, 0, 1.22, 0.035);
+      part(wall, box(HALF * 2, 0.16, 0.12), trimMat, 0, WALL_H - 0.08, 0.06);
+      part(wall, box(HALF * 2, 0.05, 0.05), trimMat, 0, WALL_H - 0.75, 0.025);
+      part(wall, new T.PlaneGeometry(HALF * 2, 0.42), friezeMat, 0, WALL_H - 0.45, 0.004);
+    }
+
+    // Windows with a sunny view, sills, curtains and a radiator underneath
+    const skyTex = canvasTex(256, 256, (g, w, h) => {
+      const grad = g.createLinearGradient(0, 0, 0, h);
+      grad.addColorStop(0, '#7fbcf0'); grad.addColorStop(0.7, '#cfe8ff'); grad.addColorStop(1, '#e8f4ff');
+      g.fillStyle = grad; g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(255,255,255,.9)';
+      for (const [x, y, r] of [[60, 60, 22], [85, 52, 28], [112, 62, 20], [190, 100, 16], [210, 94, 22], [232, 102, 15]]) { g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); }
+      g.fillStyle = '#8cc58a';
+      g.beginPath(); g.moveTo(0, 200); g.quadraticCurveTo(80, 150, 160, 195); g.quadraticCurveTo(220, 170, 256, 185); g.lineTo(256, 256); g.lineTo(0, 256); g.fill();
+      g.fillStyle = '#6aa86b';
+      g.beginPath(); g.moveTo(0, 230); g.quadraticCurveTo(120, 195, 256, 228); g.lineTo(256, 256); g.lineTo(0, 256); g.fill();
+    });
+    const skyMat = new T.MeshBasicMaterial({ map: skyTex });
+    const curtainTex = canvasTex(64, 64, (g, w, h) => {
+      g.fillStyle = '#f6b7a8'; g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(255,255,255,.5)';
+      for (let x = 0; x < w; x += 16) g.fillRect(x, 0, 6, h);
+    }, [3, 1]);
+    const curtainMat = new T.MeshStandardMaterial({ map: curtainTex, roughness: 0.95 });
+    const radMat = new T.MeshStandardMaterial({ color: 0xf2efe8, roughness: 0.45, metalness: 0.2 });
+    function windowOn(wall, u) {
+      const W = 2.2, H = 2.3, y0 = 1.75, yc = y0 + H / 2;
+      part(wall, new T.PlaneGeometry(W, H), skyMat, u, yc, 0.005);
+      for (const dy of [-H / 2, H / 2]) part(wall, box(W + 0.24, 0.12, 0.14), trimMat, u, yc + dy, 0.07);
+      for (const du of [-W / 2, W / 2]) part(wall, box(0.12, H + 0.12, 0.14), trimMat, u + du, yc, 0.07);
+      part(wall, box(0.05, H, 0.06), trimMat, u, yc, 0.04);
+      part(wall, box(W, 0.05, 0.06), trimMat, u, yc + 0.25, 0.04);
+      part(wall, box(W + 0.5, 0.06, 0.3), trimMat, u, y0 - 0.06, 0.15, true);
+      // curtains, gathered at the sides, and the rod above
+      part(wall, new T.CylinderGeometry(0.025, 0.025, W + 1.3, 8).rotateZ(Math.PI / 2), beamMat, u, y0 + H + 0.28, 0.16);
+      for (const side of [-1, 1]) {
+        const c = part(wall, new T.CylinderGeometry(0.2, 0.26, H + 0.55, 10, 1, true), curtainMat, u + side * (W / 2 + 0.38), y0 + H / 2 + 0.02, 0.2, true);
+        c.scale.z = 0.45;
+      }
+      // a radiator under the sill
+      for (let k = 0; k < 9; k++) part(wall, box(0.07, 0.62, 0.12), radMat, u - 0.6 + k * 0.15, 0.62, 0.12);
+      part(wall, box(1.4, 0.05, 0.1), radMat, u, 0.95, 0.12);
+    }
+    windowOn('north', -5.2);
+    windowOn('north', 5.2);
+    windowOn('east', -3);
+
+    // A door on the west wall, with a light switch next to it
+    const doorMat = new T.MeshStandardMaterial({ color: 0xfaf3e6, roughness: 0.5 });
+    const doorU = 3, DW = 1.05, DH = 2.3;
+    part('west', box(DW, DH, 0.05), doorMat, doorU, DH / 2, 0.03, true);
+    for (const [du, dy, h] of [[0, 0.62, 0.8], [0, 1.65, 0.95]]) part('west', box(DW - 0.3, h, 0.02), new T.MeshStandardMaterial({ color: 0xf0e6d4, roughness: 0.6 }), doorU + du, dy, 0.06);
+    for (const du of [-DW / 2 - 0.06, DW / 2 + 0.06]) part('west', box(0.12, DH + 0.1, 0.07), trimMat, doorU + du, (DH + 0.1) / 2, 0.035);
+    part('west', box(DW + 0.24, 0.12, 0.07), trimMat, doorU, DH + 0.1, 0.035);
+    part('west', new T.SphereGeometry(0.045, 12, 8), new T.MeshStandardMaterial({ color: 0xd9a531, roughness: 0.25, metalness: 0.7 }), doorU + DW / 2 - 0.12, 1.05, 0.09);
+    part('west', box(0.09, 0.14, 0.015), trimMat, doorU + DW / 2 + 0.35, 1.35, 0.008);
+
+    // A corkboard of crayon drawings between the north windows
+    const artTex = canvasTex(1024, 576, (g, w, h) => {
+      g.fillStyle = '#c99a62'; g.fillRect(0, 0, w, h);
+      g.fillStyle = 'rgba(90,55,25,.18)';
+      for (let i = 0; i < 1800; i++) g.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+      const crayon = (col, width = 7) => { g.strokeStyle = col; g.lineWidth = width; g.lineCap = 'round'; g.lineJoin = 'round'; };
+      const paper = (x, y, pw, ph, rot, draw) => {
+        g.save(); g.translate(x + pw / 2, y + ph / 2); g.rotate(rot);
+        g.fillStyle = 'rgba(0,0,0,.18)'; g.fillRect(-pw / 2 + 5, -ph / 2 + 6, pw, ph);
+        g.fillStyle = '#fffdf7'; g.fillRect(-pw / 2, -ph / 2, pw, ph);
+        g.translate(-pw / 2, -ph / 2); draw(pw, ph);
+        g.fillStyle = '#e04848'; g.beginPath(); g.arc(pw / 2, 12, 8, 0, TAU); g.fill();
+        g.restore();
+      };
+      // a sunny house
+      paper(40, 50, 280, 220, -0.05, (pw, ph) => {
+        crayon('#ffd400'); g.beginPath(); g.arc(225, 55, 26, 0, TAU); g.stroke();
+        for (let a = 0; a < 8; a++) { g.beginPath(); g.moveTo(225 + Math.cos(a * 0.785) * 34, 55 + Math.sin(a * 0.785) * 34); g.lineTo(225 + Math.cos(a * 0.785) * 48, 55 + Math.sin(a * 0.785) * 48); g.stroke(); }
+        crayon('#d7263d'); g.strokeRect(60, 115, 100, 80);
+        g.beginPath(); g.moveTo(50, 118); g.lineTo(110, 70); g.lineTo(170, 118); g.stroke();
+        crayon('#7a4a2a'); g.strokeRect(97, 155, 26, 40);
+        crayon('#2e9e4f'); g.beginPath(); g.moveTo(10, 200); g.lineTo(270, 200); g.stroke();
+      });
+      // a rainbow
+      paper(370, 40, 300, 200, 0.04, (pw, ph) => {
+        ['#e63946', '#ff8c1a', '#ffd400', '#3cb371', '#1e6fd9', '#8e44ad'].forEach((c, i) => { crayon(c, 11); g.beginPath(); g.arc(150, 180, 120 - i * 13, Math.PI, 0); g.stroke(); });
+        crayon('#9ec9ff', 9); g.beginPath(); g.arc(40, 170, 18, 0, TAU); g.stroke(); g.beginPath(); g.arc(262, 170, 18, 0, TAU); g.stroke();
+      });
+      // a cat
+      paper(720, 60, 250, 230, -0.03, (pw, ph) => {
+        crayon('#ff8c1a'); g.beginPath(); g.arc(125, 135, 55, 0, TAU); g.stroke();
+        g.beginPath(); g.moveTo(80, 100); g.lineTo(85, 55); g.lineTo(110, 82); g.moveTo(140, 82); g.lineTo(165, 55); g.lineTo(170, 100); g.stroke();
+        crayon('#222', 6); g.beginPath(); g.arc(105, 125, 5, 0, TAU); g.arc(145, 125, 5, 0, TAU); g.stroke();
+        g.beginPath(); g.moveTo(115, 150); g.quadraticCurveTo(125, 160, 135, 150); g.stroke();
+      });
+      // flowers
+      paper(120, 320, 330, 210, 0.05, (pw, ph) => {
+        ['#e05aa8', '#8e44ad', '#ff5050', '#1e90ff'].forEach((c, i) => {
+          const x = 50 + i * 75, y = 85 + (i % 2) * 20;
+          crayon('#2e9e4f'); g.beginPath(); g.moveTo(x, y + 20); g.lineTo(x, 195); g.stroke();
+          crayon(c); for (let a = 0; a < 5; a++) { g.beginPath(); g.arc(x + Math.cos(a * 1.256) * 18, y + Math.sin(a * 1.256) * 18, 12, 0, TAU); g.stroke(); }
+          crayon('#ffd400'); g.beginPath(); g.arc(x, y, 6, 0, TAU); g.stroke();
+        });
+      });
+      // scribbles, a fish and a sorted crayon list
+      paper(520, 300, 230, 240, -0.06, (pw, ph) => {
+        crayon('#1e90ff'); g.beginPath(); g.ellipse(110, 120, 70, 40, 0, 0, TAU); g.stroke();
+        g.beginPath(); g.moveTo(178, 120); g.lineTo(215, 90); g.lineTo(215, 150); g.closePath(); g.stroke();
+        crayon('#222', 6); g.beginPath(); g.arc(75, 110, 5, 0, TAU); g.stroke();
+        crayon('#00b3a4', 5); for (let k = 0; k < 4; k++) { g.beginPath(); g.arc(160 - k * 30, 50 - k * 6, 6 + k, 0, TAU); g.stroke(); }
+      });
+      paper(790, 330, 190, 210, 0.07, (pw, ph) => {
+        SHADES.slice(0, 18).forEach((s, i) => { crayon(s.hex, 8); const y = 40 + (i % 9) * 18, x = i < 9 ? 20 : 105; g.beginPath(); g.moveTo(x, y); g.lineTo(x + 65, y); g.stroke(); });
+      });
+    });
+    part('north', box(3.7, 2.1, 0.06), beamMat, 0, 2.95, 0.03, true);
+    part('north', new T.PlaneGeometry(3.5, 1.9), new T.MeshStandardMaterial({ map: artTex, roughness: 0.9 }), 0, 2.95, 0.062);
+
+    // Ceiling beams and pendant lamps
+    for (const x of [-9, -3, 3, 9]) {
+      const b = new T.Mesh(box(0.32, 0.34, HALF * 2), beamMat);
+      b.position.set(x, WALL_H - 0.17, 0);
+      scene.add(b);
+    }
+    const cordMat = new T.MeshBasicMaterial({ color: 0x3a2e2a });
+    const shadeMat = new T.MeshStandardMaterial({ color: 0xf2c14e, roughness: 0.5, side: T.DoubleSide });
+    const bulbMat = new T.MeshBasicMaterial({ color: 0xfff3c8 });
     for (const [x, z] of [[-6, -6], [6, -6], [-6, 6], [6, 6], [0, 0]]) {
-      const l = new T.Mesh(new T.CylinderGeometry(0.5, 0.5, 0.06, 24), new T.MeshBasicMaterial({ color: 0xfff6d8 }));
-      l.position.set(x, WALL_H - 0.03, z);
-      scene.add(l);
+      const cord = new T.Mesh(new T.CylinderGeometry(0.012, 0.012, 1.0, 6), cordMat);
+      cord.position.set(x, WALL_H - 0.5, z);
+      scene.add(cord);
+      const shade = new T.Mesh(new T.CylinderGeometry(0.14, 0.45, 0.36, 24, 1, true), shadeMat);
+      shade.position.set(x, WALL_H - 1.15, z);
+      scene.add(shade);
+      const bulb = new T.Mesh(new T.SphereGeometry(0.12, 14, 10), bulbMat);
+      bulb.position.set(x, WALL_H - 1.25, z);
+      scene.add(bulb);
     }
   }
 
@@ -310,6 +493,54 @@
   crayonMesh.receiveShadow = true;
   crayonMesh.frustumCulled = false;
   scene.add(crayonMesh);
+
+  // Crayons that are sorted into open boxes stand up in them, tips out, like a real crayon box
+  const STORED_MAX = 16000;
+  const storedMesh = new T.InstancedMesh(crayonGeo, crayonMat, STORED_MAX);
+  storedMesh.setColorAt(0, new T.Color(1, 1, 1));
+  storedMesh.count = 0;
+  storedMesh.frustumCulled = false;
+  storedMesh.receiveShadow = true;
+  scene.add(storedMesh);
+  let storedDirty = true;
+  const STAND_NX = 11, STAND_NZ = 8, STAND_FLOOR = BOX_H - 0.37; // a raised insert so the tips peek over the rim
+  // fill from the middle out, so a half-full box looks tidy
+  const STAND_SLOTS = [];
+  for (let i = 0; i < STAND_NX; i++) for (let k = 0; k < STAND_NZ; k++) {
+    const x = (i - (STAND_NX - 1) / 2) * 0.088, z = (k - (STAND_NZ - 1) / 2) * 0.083;
+    STAND_SLOTS.push({ x, z, d: Math.hypot(x * 0.75, z) + ((i * 7 + k * 13) % 5) * 0.004 });
+  }
+  STAND_SLOTS.sort((a, b) => a.d - b.d);
+  STAND_SLOTS.forEach((sl, i) => {
+    // a little tilt and wobble each, fixed per slot so it doesn't jitter
+    const h = Math.sin(i * 12.9898) * 43758.5453;
+    const r1 = h - Math.floor(h), r2 = (h * 7.13) - Math.floor(h * 7.13);
+    sl.tilt = (r1 - 0.5) * 0.12; sl.tilt2 = (r2 - 0.5) * 0.12; sl.y = r1 * 0.02;
+  });
+  const _sm = new T.Matrix4(), _sq = new T.Quaternion(), _sq2 = new T.Quaternion(), _se = new T.Euler(), _sp = new T.Vector3(), _ss = new T.Vector3(1, 1, 1);
+  const UPRIGHT = new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 0, 1), Math.PI / 2);
+  function rebuildStored() {
+    storedDirty = false;
+    let n = 0;
+    for (const b of state.boxes) {
+      if (isDrawer(b) || !b.count) continue;
+      const ry = b.rot * Math.PI / 2, cy = Math.cos(ry), sy = Math.sin(ry);
+      const shown = Math.min(b.count, STAND_SLOTS.length);
+      for (let i = 0; i < shown && n < STORED_MAX; i++) {
+        const sl = STAND_SLOTS[i];
+        _sp.set(b.x + sl.x * cy + sl.z * sy, STAND_FLOOR + CL / 2 + sl.y, b.z - sl.x * sy + sl.z * cy);
+        _se.set(sl.tilt, ry + i, sl.tilt2);
+        _sq.setFromEuler(_se).multiply(UPRIGHT);
+        _sm.compose(_sp, _sq, _ss);
+        storedMesh.setMatrixAt(n, _sm);
+        storedMesh.setColorAt(n, SHADE_COLORS[b.color]);
+        n++;
+      }
+    }
+    storedMesh.count = n;
+    storedMesh.instanceMatrix.needsUpdate = true;
+    if (storedMesh.instanceColor) storedMesh.instanceColor.needsUpdate = true;
+  }
 
   const shadeMats = SHADES.map(s => new T.MeshStandardMaterial({ map: wrapperTex, color: s.hex, vertexColors: true, roughness: 0.55 }));
 
@@ -613,11 +844,11 @@
       stripe.position.set(x, BOX_H * 0.62, z);
       grp.add(stripe);
     }
-    // the crayons inside rise as the box fills
-    const fillMat = new T.MeshStandardMaterial({ color: SHADES[b.color].hex, roughness: 0.5 });
-    const fill = new T.Mesh(new T.BoxGeometry(BOX_W - 0.1, 1, BOX_D - 0.1), fillMat);
-    fill.visible = false;
-    grp.add(fill);
+    // a raised cardboard insert: the crayons you toss in stand on it, tips up
+    const insert = new T.Mesh(new T.BoxGeometry(BOX_W - 2 * t, 0.02, BOX_D - 2 * t), mat);
+    insert.position.y = STAND_FLOOR - 0.01;
+    insert.receiveShadow = true;
+    grp.add(insert);
     // floating sign above the box
     b.labelCanvas = document.createElement('canvas');
     b.labelCanvas.width = 320; b.labelCanvas.height = 136;
@@ -626,12 +857,13 @@
     sprite.scale.set(1.15, 0.49, 1);
     sprite.position.y = BOX_H + 0.55;
     grp.add(sprite);
-    Object.assign(b, { group: grp, mat, stripeMat, fillMat, fill });
+    Object.assign(b, { group: grp, mat, stripeMat });
     scene.add(grp);
     refreshBox(b);
   }
 
   function refreshBox(b) {
+    storedDirty = true;
     b.group.position.set(b.x, boxBase(b), b.z);
     b.group.rotation.y = b.rot * Math.PI / 2;
     const col = SHADES[b.color].hex;
@@ -643,12 +875,6 @@
       b.handle.material = f >= 1 ? handleFullMat : handleMat;
       return;
     }
-    b.fillMat.color.set(col);
-    const f = Math.min(1, b.count / capOf(b));
-    b.fill.visible = f > 0;
-    const h = Math.max(0.02, f * (BOX_H - 0.08));
-    b.fill.scale.y = h;
-    b.fill.position.y = 0.04 + h / 2;
     drawBoxLabel(b);
   }
 
@@ -1177,6 +1403,23 @@
     refreshHand();
   }
 
+  // Take crayons back out of a box or drawer, a handful at a time
+  function takeFromBox(b) {
+    if (!b.count) { toast(`That ${isDrawer(b) ? 'drawer' : 'box'} is empty.`); return; }
+    if (hand.n && hand.c !== b.color) { toast('Your hands are full of another shade. Drop them first (Q).'); return; }
+    const space = handSize(lvl('hand')) - hand.n;
+    if (space <= 0) { toast('Your hands are full!'); return; }
+    const n = Math.min(space, b.count);
+    b.count -= n;
+    unsort(b.color, n);
+    hand.c = b.color;
+    hand.n += n;
+    refreshBox(b);
+    if (isDrawer(b)) bumpDrawer(b);
+    refreshHand();
+    blip(380, 0.07, 'sine', 0.05);
+  }
+
   function dropAt(point, quiet = false) {
     handGroup.getWorldPosition(handWorld);
     const c = hand.c;
@@ -1407,6 +1650,7 @@
       scene.remove(o.group);
       state.boxes = state.boxes.filter(x => x !== o);
       openDrawers.delete(o);
+      storedDirty = true;
       toast(`Put away the ${SHADES[o.color].name} ${isDrawer(o) ? 'drawer' : 'box'}.`);
       placing = null;
       restack();
@@ -1460,7 +1704,8 @@
     state.familySorted[fi]++;
     if (show) floatAcc++;
     const n = state.familySorted[fi];
-    const ti = TIERS.indexOf(n);
+    const ti = n > state.familyBest[fi] ? TIERS.indexOf(n) : -1;
+    state.familyBest[fi] = Math.max(state.familyBest[fi], n);
     if (ti >= 0) {
       const r = REWARDS[fi][ti];
       recomputeUnlocks();
@@ -1495,11 +1740,18 @@
     }
   }
 
+  // Taking crayons back out of a box un-sorts them (unlocks you've earned stay)
+  function unsort(c, n) {
+    const fi = SHADES[c].family;
+    state.sorted = Math.max(0, state.sorted - n);
+    state.familySorted[fi] = Math.max(0, state.familySorted[fi] - n);
+  }
+
   // The next few rewards, for the HUD
   function nextReward() {
     let best = null;
     REWARDS.forEach((tiers, fi) => {
-      const n = state.familySorted[fi];
+      const n = state.familyBest[fi];
       const ti = TIERS.findIndex(t => n < t);
       if (ti < 0) return;
       const need = TIERS[ti] - n;
@@ -1554,7 +1806,9 @@
     } else if (aim.type === 'box') {
       const b = aim.obj, s = SHADES[b.color];
       const full = b.count >= capOf(b), dr = isDrawer(b);
-      const what = hand.n ? 'click to toss' : full && dr ? 'full! stack another on top' : full && !lvl('autoPack') ? 'click to pack' : 'G move' + (b.count === 0 ? ' · C change shade' : '');
+      const what = hand.n ? 'click to toss' + (hand.c === b.color ? ' · T take more' : '')
+        : full && !dr && !lvl('autoPack') ? 'click to pack · T take some out'
+        : (b.count ? 'click to take some out · ' : '') + (full && dr ? 'full, stack another on top · ' : '') + 'G move' + (b.count === 0 ? ' · C change shade' : '');
       html = `${sw(s.hex)}<b>${s.name}</b> ${dr ? 'drawer' : 'box'} ${b.count}/${capOf(b)} <span class="dim">· ${what}</span>`;
     } else if (aim.type === 'decor') {
       html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
@@ -1625,8 +1879,8 @@
       return;
     }
     if (aim.type === 'crayon') pickUp(aim.obj);
-    else if (aim.type === 'box' && isDrawer(aim.obj) && aim.obj.count >= capOf(aim.obj)) toast('This drawer is full. Stack a new one on top (E → Boxes & drawers).');
-    else if (aim.type === 'box' && aim.obj.count >= capacity() && !lvl('autoPack')) packBox(aim.obj);
+    else if (aim.type === 'box' && !isDrawer(aim.obj) && aim.obj.count >= capacity() && !lvl('autoPack')) packBox(aim.obj);
+    else if (aim.type === 'box') takeFromBox(aim.obj);
   }
 
   function setMouse(e) {
@@ -1692,6 +1946,10 @@
       if (placing.kind === 'box') { o.rot = ((o.rot || 0) + 1) % 4; refreshBox(o); }
       else if (!DECOR[o.type].wall) { o.ry = (o.ry || 0) + Math.PI / 4; refreshDecor(o); }
     } else if (e.code === 'KeyX' && placing) putAway();
+    else if (e.code === 'KeyT' && !placing) {
+      updateAim();
+      if (aim.type === 'box') takeFromBox(aim.obj);
+    }
     else if (e.code === 'KeyG' && !placing) {
       updateAim();
       if (aim.type === 'box') startPlacing('box', aim.obj, false);
@@ -1798,7 +2056,7 @@
         let how = '';
         if (!open) {
           REWARDS.forEach((tiers, fi) => tiers.forEach((r, ti) => {
-            if (r.decor === type) how = `Sort ${TIERS[ti]} ${FAMILIES[fi].name} to unlock (${Math.min(state.familySorted[fi], TIERS[ti])}/${TIERS[ti]})`;
+            if (r.decor === type) how = `Sort ${TIERS[ti]} ${FAMILIES[fi].name} to unlock (${Math.min(state.familyBest[fi], TIERS[ti])}/${TIERS[ti]})`;
           }));
         }
         const n = state.decor.filter(d => d.type === type).length;
@@ -1830,7 +2088,7 @@
       }).join('');
       list.appendChild(ups);
       FAMILIES.forEach((f, fi) => {
-        const n = state.familySorted[fi];
+        const n = state.familyBest[fi];
         const el = document.createElement('div');
         el.className = 'fam';
         const swatches = f.shades.map(s => `<span class="sw" style="background:${s[1]}"></span>`).join('');
@@ -1919,7 +2177,7 @@
       flights.forEach(f => loose.push(f.c));
       bots.forEach(b => b.carry.forEach(c => loose.push(c)));
       const s = {
-        sorted: state.sorted, familySorted: state.familySorted, done: state.done,
+        sorted: state.sorted, familySorted: state.familySorted, familyBest: state.familyBest, done: state.done,
         boxes: state.boxes.map(({ x, z, rot, color, count, packed, kind, level }) => ({ x, z, rot, color, count, packed, kind, level })),
         decor: state.decor.map(({ type, x, y, z, ry, packed }) => ({ type, x, y, z, ry, packed })),
         player: { x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch },
@@ -1947,6 +2205,7 @@
     placing = null;
     lampLights = 0;
     openDrawers.clear();
+    storedDirty = true;
   }
 
   function newGame() {
@@ -1989,6 +2248,7 @@
         Object.assign(state, {
           sorted: s.sorted || 0, done: !!s.done,
           familySorted: FAMILIES.map((_, i) => (s.familySorted && s.familySorted[i]) || 0),
+          familyBest: FAMILIES.map((_, i) => Math.max((s.familyBest && s.familyBest[i]) || 0, (s.familySorted && s.familySorted[i]) || 0)),
           player: s.player || state.player,
         });
         recomputeUnlocks();
@@ -2053,6 +2313,7 @@
     updateGlow(time);
     state.decor.forEach(d => d.update && d.update(time));
     updateDrawers(dt);
+    if (storedDirty) rebuildStored();
 
 
     if (matDirty) { crayonMesh.instanceMatrix.needsUpdate = true; matDirty = false; }
@@ -2091,6 +2352,6 @@
   // Exposed for debugging in the console
   window.craySorting = {
     get state() { return state; }, get crayons() { return cr; }, get aim() { return aim; },
-    player, SHADES, save, act, pickUp, tossToBox, hand, camera,
+    player, SHADES, save, act, pickUp, tossToBox, takeFromBox, refreshBox, hand, camera,
   };
 })();
