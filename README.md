@@ -39,7 +39,7 @@ On phones and tablets there's an on-screen joystick for walking; drag to look an
 
 ## Furniture and coloring books
 
-- **Furniture is free and movable.** The room starts with a coloring table, two chairs, a sofa, a side table and a bookcase. Move anything with `G` and add more from E → Furniture: coloring tables, little chairs, sofas, armchairs, bookcases, toy chests and side tables.
+- **The room comes furnished.** There's a coloring corner, an art corner with a desk and easel, a reading nook, a lounge with a sofa, bookcases and cubbies by the walls, area rugs (buried under crayons until you clear them) and plants in the corners. Older saves get the furniture added on load, skipping any spot you've already used. Move anything with `G`, and add more from E → Furniture.
 - **Coloring books.** Click a coloring table to open five line-art pages (Sleepy Cat, Cozy House, Goldfish Friends, Rocket Trip, Flower Garden). Draw with a waxy crayon brush in three sizes, or use the eraser. You start with Cherry, Ocean and Sunshine, and every shade you sort joins your coloring box. Your pages save in the browser, and the open book on the table shows the page you're working on.
 
 ## Files

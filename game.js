@@ -58,6 +58,12 @@
     bookcase: { name: 'Bookcase',           icon: '📚', r: 0.65, cy: 0.9,  free: true },
     toychest: { name: 'Toy Chest',          icon: '🧸', r: 0.55, cy: 0.35, free: true },
     sidetable:{ name: 'Side Table',         icon: '🫖', r: 0.32, cy: 0.35, free: true },
+    arearug:  { name: 'Area Rug',           icon: '🟫', r: 1.6,  cy: 0.05, free: true, under: true, desc: 'A big rug. Crayons cover it until you clear them away.' },
+    easel:    { name: 'Art Easel',          icon: '🎨', r: 0.5,  cy: 1.0,  free: true },
+    desk:     { name: 'Art Desk',           icon: '🖊️', r: 0.75, cy: 0.5,  free: true },
+    tallplant:{ name: 'Tall Plant',         icon: '🌿', r: 0.4,  cy: 0.9,  free: true },
+    coatrack: { name: 'Coat Rack',          icon: '🧥', r: 0.3,  cy: 1.0,  free: true },
+    cubby:    { name: 'Toy Cubbies',        icon: '🧺', r: 0.8,  cy: 0.6,  free: true },
   };
 
   // Upgrades. Their level is how many of their rewards you've unlocked.
@@ -941,6 +947,26 @@
   }
 
   const plankMat = new T.MeshStandardMaterial({ color: 0xa8703f, roughness: 0.7 });
+  const rugTex = canvasTex(512, 330, (g, w, h) => {
+    g.fillStyle = '#f3e3c3'; g.fillRect(0, 0, w, h);
+    g.strokeStyle = '#c4566b'; g.lineWidth = 10; g.strokeRect(24, 24, w - 48, h - 48);
+    g.strokeStyle = '#7fbf9b'; g.lineWidth = 6; g.strokeRect(44, 44, w - 88, h - 88);
+    const cols = ['#e88a8a', '#f6d38b', '#7fbf9b', '#7fbfe0'];
+    for (let i = 0; i < 6; i++) for (let k = 0; k < 3; k++) {
+      g.fillStyle = cols[(i + k) % 4];
+      g.beginPath(); const x = 95 + i * 64, y = 95 + k * 70;
+      g.moveTo(x, y - 22); g.lineTo(x + 22, y); g.lineTo(x, y + 22); g.lineTo(x - 22, y); g.fill();
+    }
+  });
+  const easelTex = canvasTex(256, 192, (g, w, h) => {
+    g.fillStyle = '#fffdf6'; g.fillRect(0, 0, w, h);
+    g.lineCap = 'round'; g.lineWidth = 7;
+    [['#7fbfe0', 20, 30, 236, 30], ['#7fbfe0', 20, 48, 236, 48]].forEach(([c, x1, y1, x2, y2]) => { g.strokeStyle = c; g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.stroke(); });
+    g.strokeStyle = '#2e9e4f'; g.lineWidth = 10; g.beginPath(); g.moveTo(10, 170); g.quadraticCurveTo(128, 130, 246, 170); g.stroke();
+    g.fillStyle = '#ffd400'; g.beginPath(); g.arc(200, 55, 22, 0, TAU); g.fill();
+    g.strokeStyle = '#d7263d'; g.lineWidth = 6; g.strokeRect(70, 95, 70, 55);
+    g.beginPath(); g.moveTo(62, 98); g.lineTo(105, 65); g.lineTo(148, 98); g.stroke();
+  });
 
   // ---------------------------------------------------------------------------
   // Decorations
@@ -1150,6 +1176,69 @@
           const m = new T.Mesh(crayonGeo, shadeMats[c]);
           m.position.set(x, 0.665, z); m.rotation.y = ry;
           g.add(m);
+        });
+        break;
+      }
+      case 'arearug': {
+        g.add(mesh(new T.BoxGeometry(3.4, 0.012, 2.3), std(0x3e6d8e, { roughness: 1 }), 0, 0.006, 0, false));
+        g.add(mesh(new T.BoxGeometry(3.1, 0.012, 2.0), new T.MeshStandardMaterial({ map: rugTex, roughness: 1 }), 0, 0.009, 0, false));
+        break;
+      }
+      case 'easel': {
+        const wood = std(0xc28a5a);
+        for (const [x, rz] of [[-0.32, -0.12], [0.32, 0.12]]) { const l = mesh(new T.BoxGeometry(0.05, 1.8, 0.05), wood, x, 0.88, 0.05); l.rotation.z = rz; l.rotation.x = -0.12; g.add(l); }
+        const back = mesh(new T.BoxGeometry(0.05, 1.7, 0.05), wood, 0, 0.82, -0.32); back.rotation.x = 0.3; g.add(back);
+        g.add(mesh(new T.BoxGeometry(0.8, 0.05, 0.12), wood, 0, 0.62, 0.12));
+        g.add(mesh(new T.BoxGeometry(0.78, 0.6, 0.03), std(0xfffdf6), 0, 0.96, 0.1));
+        const pic = new T.Mesh(new T.PlaneGeometry(0.72, 0.54), new T.MeshStandardMaterial({ map: easelTex, roughness: 0.9 }));
+        pic.position.set(0, 0.96, 0.117); pic.rotation.x = -0.06;
+        g.add(pic);
+        break;
+      }
+      case 'desk': {
+        const top = std(0xf3ead8, { roughness: 0.6 }), side = std(0x7fbfe0);
+        g.add(mesh(new T.BoxGeometry(1.4, 0.05, 0.7), top, 0, 0.74, 0));
+        g.add(mesh(new T.BoxGeometry(0.42, 0.72, 0.66), side, 0.47, 0.36, 0));
+        for (const y of [0.18, 0.42, 0.62]) g.add(mesh(new T.BoxGeometry(0.36, 0.16, 0.02), std(0xf6d38b), 0.47, y, 0.34, false));
+        for (const z of [-0.3, 0.3]) g.add(mesh(new T.BoxGeometry(0.04, 0.72, 0.04), side, -0.66, 0.36, z));
+        g.add(mesh(new T.CylinderGeometry(0.07, 0.06, 0.14, 12, 1, true), std(0xd7263d, { side: T.DoubleSide }), -0.45, 0.83, -0.18));
+        [16, 22, 25, 2].forEach((c, i) => {
+          const m = new T.Mesh(crayonGeo, shadeMats[c]);
+          m.rotation.set((i - 1.5) * 0.15, i, Math.PI / 2);
+          m.position.set(-0.45 + (i - 1.5) * 0.02, 0.9, -0.18);
+          g.add(m);
+        });
+        g.add(mesh(new T.BoxGeometry(0.42, 0.01, 0.3), std(0xfffdf6), 0.05, 0.77, 0.05, false));
+        break;
+      }
+      case 'tallplant': {
+        g.add(mesh(new T.CylinderGeometry(0.28, 0.22, 0.5, 16), std(0xf3ead8), 0, 0.25, 0));
+        g.add(mesh(new T.CylinderGeometry(0.03, 0.04, 1.1, 8), std(0x7a5230), 0, 0.95, 0));
+        const leaf = std(0x2f7d46), leaf2 = std(0x4fa865);
+        [[0, 1.6, 0, 0.35], [-0.22, 1.35, 0.1, 0.28], [0.24, 1.4, -0.08, 0.3], [0.05, 1.15, 0.2, 0.25], [-0.1, 1.85, -0.1, 0.25], [0.15, 1.75, 0.15, 0.22]].forEach(([x, y, z, r], i) => {
+          g.add(mesh(new T.SphereGeometry(r, 12, 9), i % 2 ? leaf2 : leaf, x, y, z));
+        });
+        break;
+      }
+      case 'coatrack': {
+        const wood = std(0x8a5a35);
+        g.add(mesh(new T.CylinderGeometry(0.03, 0.035, 1.8, 10), wood, 0, 0.9, 0));
+        for (let k = 0; k < 4; k++) { const f = mesh(new T.BoxGeometry(0.5, 0.03, 0.05), wood, 0, 0.03, 0); f.rotation.y = k * Math.PI / 4; g.add(f); }
+        for (let k = 0; k < 4; k++) { const a = k * Math.PI / 2; g.add(mesh(new T.CylinderGeometry(0.015, 0.015, 0.16, 6), wood, Math.cos(a) * 0.08, 1.7, Math.sin(a) * 0.08)); }
+        const scarf = mesh(new T.BoxGeometry(0.12, 0.7, 0.04), std(0xe05aa8, { roughness: 1 }), 0.1, 1.35, 0); g.add(scarf);
+        g.add(mesh(new T.CylinderGeometry(0.16, 0.16, 0.12, 16), std(0xf2c14e, { roughness: 0.9 }), -0.08, 1.82, 0));
+        g.add(mesh(new T.CylinderGeometry(0.24, 0.24, 0.02, 16), std(0xf2c14e, { roughness: 0.9 }), -0.08, 1.77, 0));
+        const coat = mesh(new T.CylinderGeometry(0.14, 0.24, 0.85, 12), std(0x3e6d8e, { roughness: 1 }), 0, 1.22, -0.12); g.add(coat);
+        break;
+      }
+      case 'cubby': {
+        const wood = std(0xf3ead8, { roughness: 0.7 });
+        g.add(mesh(new T.BoxGeometry(1.6, 1.0, 0.04), wood, 0, 0.5, -0.2));
+        for (const x of [-0.78, -0.26, 0.26, 0.78]) g.add(mesh(new T.BoxGeometry(0.04, 1.0, 0.42), wood, x, 0.5, 0));
+        for (const y of [0.02, 0.5, 0.98]) g.add(mesh(new T.BoxGeometry(1.6, 0.04, 0.42), wood, 0, y, 0));
+        [0xd7263d, 0x1e6fd9, 0xf2c14e, 0x2e9e4f, 0x8e44ad, 0xff8c1a].forEach((c, i) => {
+          const x = -0.52 + (i % 3) * 0.52, y = i < 3 ? 0.25 : 0.73;
+          g.add(mesh(new T.BoxGeometry(0.44, 0.38, 0.36), std(c, { roughness: 0.9 }), x, y, 0.02));
         });
         break;
       }
@@ -1724,14 +1813,16 @@
     let r = 0;
     if (kind === 'box') r = Math.max(BOX_W, BOX_D) / 2 + 0.2;
     else if (!DECOR[o.type].wall && !DECOR[o.type].under) r = DECOR[o.type].r + 0.15;
-    if (r) {
-      const list = [];
-      forNear(o.x, o.z, r + 0.2, c => { if (blockedAt(c.x, c.z, 0.05)) list.push(c); });
-      list.sort((a, b) => b.y - a.y).forEach(c => { removeCrayon(c); });
-      list.forEach(c => addCrayon(c.x, c.z, c.c));
-    }
+    if (r) clearUnder(o.x, o.z, r);
     blip(500, 0.08, 'triangle', 0.05);
     save();
+  }
+
+  function clearUnder(x, z, r) {
+    const list = [];
+    forNear(x, z, r + 0.2, c => { if (blockedAt(c.x, c.z, 0.05)) list.push(c); });
+    list.sort((a, b) => b.y - a.y).forEach(c => { removeCrayon(c); });
+    list.forEach(c => addCrayon(c.x, c.z, c.c));
   }
 
   function cancelPlacing() {
@@ -1919,7 +2010,7 @@
       html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· ${aim.obj.type === 'table' && !hand.n ? 'click to color · ' : ''}G move</span>`;
     } else if (aim.type === 'floor') {
       if (hand.n && aim.t < 9) html = '<span class="dim">click to drop here</span>';
-      else if (aim.rug && aim.t < 8) html = '<b>Cozy Rug</b> <span class="dim">· G move</span>';
+      else if (aim.rug && aim.t < 8) html = `<b>${DECOR[aim.rug.type].name}</b> <span class="dim">· G move</span>`;
     }
     if (html !== lastAimHTML) { aimLabel.innerHTML = html; lastAimHTML = html; }
     aimLabel.hidden = !html;
@@ -2523,7 +2614,7 @@
       flights.forEach(f => loose.push(f.c));
       bots.forEach(b => b.carry.forEach(c => loose.push(c)));
       const s = {
-        sorted: state.sorted, familySorted: state.familySorted, familyBest: state.familyBest, shadeSorted: state.shadeSorted, done: state.done,
+        sorted: state.sorted, familySorted: state.familySorted, familyBest: state.familyBest, shadeSorted: state.shadeSorted, done: state.done, furnished: !!state.furnished,
         boxes: state.boxes.map(({ x, z, rot, color, count, packed, kind, level }) => ({ x, z, rot, color, count, packed, kind, level })),
         decor: state.decor.map(({ type, x, y, z, ry, packed }) => ({ type, x, y, z, ry, packed })),
         player: { x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch },
@@ -2554,6 +2645,38 @@
     storedDirty = true;
   }
 
+  // The room comes furnished. Everything can still be moved with G.
+  const FURNISHINGS = [
+    // coloring corner (south-west)
+    ['arearug', -8.4, 7.4, 0], ['table', -8.6, 7.2, 0.3], ['chair', -8.4, 8.3, Math.PI + 0.3], ['chair', -9.2, 6.2, -0.4],
+    ['tallplant', -11.2, 11.2, 0], ['cubby', -8, 11.6, Math.PI],
+    // by the door (west wall)
+    ['coatrack', -11.4, -1.4, 0], ['bookcase', -11.6, 1.6, Math.PI / 2], ['bookcase', -11.6, 3.1, Math.PI / 2],
+    // art corner (north-west)
+    ['desk', -9.6, -11.45, 0], ['chair', -9.7, -10.55, Math.PI], ['easel', -9.4, -8.6, 0.83], ['tallplant', -11.2, -11.2, 0],
+    // under the corkboard
+    ['toychest', 0, -11.55, 0],
+    // reading nook (north-east)
+    ['arearug', 9.4, -9.3, -Math.PI / 4], ['armchair', 10, -10, -Math.PI / 4], ['sidetable', 11.1, -8.5, 0],
+    ['bookcase', 11.6, -7, -Math.PI / 2], ['tallplant', 11.2, -11.2, 0],
+    // east wall
+    ['cubby', 11.6, 3, -Math.PI / 2],
+    // lounge (south-east)
+    ['arearug', 8.4, 8.2, Math.PI / 2], ['sofa', 9.6, 8.2, -Math.PI / 2], ['sidetable', 9.8, 6.6, 0], ['armchair', 7.2, 10.2, -2.53],
+    ['tallplant', 11.2, 11.2, 0],
+  ];
+  function furnish(existing = false) {
+    for (const [type, x, z, ry] of FURNISHINGS) {
+      // in an older save, skip any spot you've already used for something else
+      if (existing && !DECOR[type].under && (blockedAt(x, z, DECOR[type].r) || state.boxes.some(b => Math.hypot(b.x - x, b.z - z) < DECOR[type].r + 0.7))) continue;
+      const d = { type, x, y: 0, z, ry, packed: [] };
+      state.decor.push(d);
+      buildDecor(d);
+      if (existing && !DECOR[type].under) clearUnder(x, z, DECOR[type].r + 0.15);
+    }
+    state.furnished = true;
+  }
+
   function newGame() {
     state = freshState();
     recomputeUnlocks();
@@ -2566,13 +2689,7 @@
       state.decor.push(d);
       buildDecor(d);
     });
-    // a little furniture to start with; move it with G or add more from E → Furniture
-    [['table', -8.6, 7.2, 0.3], ['chair', -8.4, 8.3, Math.PI + 0.3], ['chair', -9.2, 6.2, -0.4],
-     ['sofa', 9.6, 8.2, -Math.PI / 2], ['sidetable', 9.8, 6.6, 0], ['bookcase', -11.5, 0, Math.PI / 2]].forEach(([type, x, z, ry]) => {
-      const d = { type, x, y: 0, z, ry, packed: [] };
-      state.decor.push(d);
-      buildDecor(d);
-    });
+    furnish();
     // An absurd amount of crayons covering every bit of floor, drifted into heaps.
     // Every crayon is a random shade, so there's no pre-sorting anywhere.
     const heaps = [[-6, -6, 3.5], [5, -7, 3], [-1, -1, 3.2], [7.5, 2, 2.6], [-8, 3.5, 2.4], [1, 4.5, 2], [-4, 8, 1.6], [9, -1.5, 1.8]];
@@ -2624,6 +2741,12 @@
           pushCrayon({ x: f[i] / 1000, y: f[i + 1] / 1000, z: f[i + 2] / 1000, ax: f[i + 3] / 32000, ay: f[i + 4] / 32000, az: f[i + 5] / 32000, c: f[i + 6], dy: 0, vy: 0, delay: 0 });
         }
         (s.loose || []).forEach(c => addCrayon(player.x + rand(-1, 1), player.z + rand(-1, 1), c));
+        state.furnished = !!s.furnished;
+        if (!state.furnished) {
+          // rooms saved before the furniture arrived get it now (minus pieces you already placed)
+          furnish(true);
+          save();
+        }
         syncBots();
         return true;
       }
