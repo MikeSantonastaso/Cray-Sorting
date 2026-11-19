@@ -202,6 +202,7 @@
   // State
   // ---------------------------------------------------------------------------
   let state;
+  let repairedMissing = 0;   // crayons an older build lost, put back on load
 
   function freshState() {
     return {
@@ -740,16 +741,29 @@
     return null;
   }
 
+  // A spot right by a wall with furniture just in front of it is a pocket you can't reach into
+  const POCKET = 0.7;
+  function inPocket(x, z) {
+    const ex = HALF - Math.abs(x), ez = HALF - Math.abs(z);
+    if (ex < POCKET && blockedAt(x - Math.sign(x) * (POCKET + 0.05 - ex), z, 0)) return true;
+    if (ez < POCKET && blockedAt(x, z - Math.sign(z) * (POCKET + 0.05 - ez), 0)) return true;
+    return false;
+  }
+  function crayonBlocked(x, z, pad) { return blockedAt(x, z, pad) || inPocket(x, z); }
+  const inRoom = (x, z) => Math.abs(x) <= HALF - 0.3 && Math.abs(z) <= HALF - 0.3;
   function pushOut(x, z) {
-    for (let k = 0; k < 6; k++) {
-      const b = blockedAt(x, z);
-      if (!b) break;
-      let dx = x - b.x, dz = z - b.z;
-      const l = Math.hypot(dx, dz) || 1;
-      dx /= l; dz /= l;
-      x += dx * 0.35; z += dz * 0.35;
+    x = clamp(x, -HALF + 0.3, HALF - 0.3); z = clamp(z, -HALF + 0.3, HALF - 0.3);
+    if (!crayonBlocked(x, z)) return [x, z];
+    // the nearest open floor, searching outward in rings (toward the room's middle first on ties)
+    const toMid = Math.atan2(-z, -x);
+    for (let r = 0.2; r < 4; r += 0.15) {
+      for (let k = 0; k < 16; k++) {
+        const a = toMid + (k % 2 ? 1 : -1) * Math.ceil(k / 2) * TAU / 16;
+        const nx = x + Math.cos(a) * r, nz = z + Math.sin(a) * r;
+        if (inRoom(nx, nz) && !crayonBlocked(nx, nz)) return [nx, nz];
+      }
     }
-    return [clamp(x, -HALF + 0.3, HALF - 0.3), clamp(z, -HALF + 0.3, HALF - 0.3)];
+    return [x * 0.9, z * 0.9];
   }
 
   // Let a crayon roll down the side of a pile until it finds a resting spot
@@ -762,7 +776,7 @@
       for (let j = 0; j < 6; j++) {
         const a = Math.random() * TAU;
         const nx = x + Math.cos(a) * 0.14, nz = z + Math.sin(a) * 0.14;
-        if (Math.abs(nx) > HALF - 0.3 || Math.abs(nz) > HALF - 0.3 || blockedAt(nx, nz)) continue;
+        if (Math.abs(nx) > HALF - 0.3 || Math.abs(nz) > HALF - 0.3 || crayonBlocked(nx, nz)) continue;
         const ny = supportAt(nx, nz);
         if (ny < by - 0.1) { by = ny; best = [nx, nz]; }
       }
@@ -2111,6 +2125,7 @@
     if (carry) { toast('Put the box you are carrying on a shelf first.'); return; }
     if (!lvl('tote')) { toast('The tote bucket unlocks at 1,500 crayons sorted.'); return; }
     tote.on = !tote.on;
+    if (tote.on && broom.on) { broom.on = false; broomGroup.visible = false; }
     if (tote.on && hand.n) {
       // what's in your hands goes into the tote
       const space = toteCap(lvl('tote')) - tote.items.length, n = Math.min(space, hand.n);
@@ -2427,6 +2442,7 @@
       return;
     }
     if (tote.on) { toggleTote(); if (tote.on) return; }
+    if (broom.on) { broom.on = false; broomGroup.visible = false; }
     if (hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
     vac.on = true; tote.on = true; tote.items = tote.items || [];
     refreshTote(); toteGroup.visible = false; vacGroup.visible = true;
@@ -2479,6 +2495,65 @@
   canvas.addEventListener('pointerdown', () => { vac.held = true; });
   window.addEventListener('pointerup', () => { vac.held = false; });
 
+  // ---------------------------------------------------------------------------
+  // Broom (J): hold the mouse to push crayons ahead of you. Clear a spot to build,
+  // sweep a heap into one pile, or pull crayons out from a corner.
+  // ---------------------------------------------------------------------------
+  const broom = { on: false, acc: 0, swing: 0 };
+  const broomGroup = new T.Group();
+  {
+    const wood = std(0xc8945a, { roughness: 0.7 }), straw = std(0xe8c35a, { roughness: 0.9 }), band = std(0xd94b4b);
+    const stick = mesh(new T.CylinderGeometry(0.018, 0.018, 0.9, 8), wood, 0, 0.1, 0, false);
+    broomGroup.add(stick);
+    const head = mesh(new T.CylinderGeometry(0.05, 0.13, 0.26, 12), straw, 0, -0.44, 0, false);
+    head.scale.set(1.5, 1, 0.35); broomGroup.add(head);
+    broomGroup.add(mesh(new T.CylinderGeometry(0.055, 0.06, 0.04, 12), band, 0, -0.32, 0, false));
+    broomGroup.children[2].scale.set(1.4, 1, 0.4);
+    broomGroup.position.set(0.3, -0.12, -0.55);
+    broomGroup.rotation.set(0.9, 0, -0.25);
+    broomGroup.visible = false;
+    camera.add(broomGroup);
+  }
+  function toggleBroom() {
+    if (carry) { toast('Put the box you are carrying on a shelf first.'); return; }
+    if (broom.on) { broom.on = false; broomGroup.visible = false; blip(400, 0.08, 'triangle', 0.05); return; }
+    if (vac.on) toggleVac();
+    if (tote.on) { toggleTote(); if (tote.on) return; }
+    if (hand.n) dropAt(new T.Vector3(player.x - Math.sin(player.yaw) * 0.8, 0, player.z - Math.cos(player.yaw) * 0.8), true);
+    broom.on = true; broomGroup.visible = true;
+    blip(520, 0.08, 'triangle', 0.05);
+    toast('Broom out. Hold the mouse and walk to push crayons ahead of you. J puts it away.');
+  }
+  const SWEEP_R = 1.4, SWEEP_PUSH = 0.65, SWEEP_MAX = 90;
+  function updateBroom(dt) {
+    if (!broom.on) return;
+    const held = vac.held && !anyModal() && !placing && !planner.on;
+    broom.swing = held ? broom.swing + dt * 9 : broom.swing * Math.max(0, 1 - dt * 8);
+    broomGroup.rotation.z = -0.25 + (held ? Math.sin(broom.swing) * 0.45 : 0);
+    if (!held) { broom.acc = 0; return; }
+    broom.acc += dt;
+    if (broom.acc < 0.3) return;
+    broom.acc = 0;
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    const list = [];
+    forNear(player.x + fx * SWEEP_R * 0.5, player.z + fz * SWEEP_R * 0.5, SWEEP_R, o => {
+      if (o.dead || o.claimed || o.delay > 0) return;
+      const dx = o.x - player.x, dz = o.z - player.z, d = Math.hypot(dx, dz);
+      if (d < 0.25 || d > SWEEP_R) return;
+      if ((dx * fx + dz * fz) / d < 0.45) return;   // only what's in front of the bristles
+      list.push(o);
+    });
+    if (!list.length) return;
+    list.sort((a, b) => b.y - a.y);
+    const moved = list.slice(0, SWEEP_MAX);
+    moved.forEach(o => removeCrayon(o));
+    moved.forEach(o => {
+      const push = SWEEP_PUSH * rand(0.7, 1.2);
+      addCrayon(o.x + fx * push + rand(-0.12, 0.12), o.z + fz * push + rand(-0.12, 0.12), o.c);
+    });
+    blip(180 + Math.random() * 60, 0.07, 'triangle', 0.02);
+  }
+
   // Roomba docks: choose what their roombas collect
   function openDockPicker(dock) {
     if (locked) document.exitPointerLock();
@@ -2520,7 +2595,7 @@
       state.decor.forEach(d => { if (d.type === 'shelf') d.packed.forEach(c => { if (c != null) t[c] += capacity(); }); });
       state.shadeTotal = t.map((n, i) => Math.max(n, state.shadeSorted[i] + floorByShade[i], 1));
     }
-    let all = true;
+    let all = !hand.n && !tote.items.length && !travellers.length && hoppers().every(h => !(h.queue || []).length && !(h.trays || []).some(t => t.length));
     SHADES.forEach((_, i) => {
       shadeDone[i] = clamp(1 - floorByShade[i] / state.shadeTotal[i], 0, 1);
       if (floorByShade[i] > 0) all = false;
@@ -3036,11 +3111,14 @@
     }
     let p = aim.floor && aim.floor.t < (planner.on ? 60 : 12) ? aim.floor.point : null;
     if (!p) p = new T.Vector3(player.x - Math.sin(player.yaw) * 2.5, 0, player.z - Math.cos(player.yaw) * 2.5);
-    o.x = clamp(p.x, -HALF + 0.7, HALF - 0.7);
-    o.z = clamp(p.z, -HALF + 0.7, HALF - 0.7);
+    o.x = clamp(p.x, -HALF + 0.2, HALF - 0.2);
+    o.z = clamp(p.z, -HALF + 0.2, HALF - 0.2);
     // snap to a 25 cm grid so rows line up; hold Alt to place freely
     placing.snap = !(keys.has('AltLeft') || keys.has('AltRight'));
     if (placing.snap) { o.x = Math.round(o.x * 4) / 4; o.z = Math.round(o.z * 4) / 4; }
+    // then slide it in so its back sits flush against the wall, with no gap for crayons
+    if (placing.kind === 'box') refreshBox(o); else refreshDecor(o);
+    fitInRoom(o);
     if (isDrawer(o)) {
       // Looking at a drawer (or the floor under one) stacks the new drawer on top of it
       let base = aim.box && isDrawer(aim.box.obj) ? aim.box.obj : null;
@@ -3057,6 +3135,33 @@
     if (placing.kind === 'box') refreshBox(o); else refreshDecor(o);
   }
 
+  // Measure what's actually drawn (not labels or glows) and push it back inside the walls
+  const _fitBox = new T.Box3(), _fitTmp = new T.Box3();
+  function footprintOf(group) {
+    _fitBox.makeEmpty();
+    group.updateMatrixWorld(true);
+    group.traverse(m => {
+      if (!m.isMesh || m.isSprite || !m.visible || m.userData.noFit) return;
+      if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+      _fitTmp.copy(m.geometry.boundingBox).applyMatrix4(m.matrixWorld);
+      _fitBox.union(_fitTmp);
+    });
+    return _fitBox;
+  }
+  const WALL_GAP = 0.035;   // the wainscoting's depth
+  function fitInRoom(o) {
+    if (!o.group || (isDrawer(o) && o.level > 0)) return;
+    const b = footprintOf(o.group);
+    if (b.isEmpty()) return;
+    const lim = HALF - WALL_GAP;
+    let dx = 0, dz = 0;
+    if (b.max.x - b.min.x < lim * 2) { if (b.max.x > lim) dx = lim - b.max.x; else if (b.min.x < -lim) dx = -lim - b.min.x; }
+    if (b.max.z - b.min.z < lim * 2) { if (b.max.z > lim) dz = lim - b.max.z; else if (b.min.z < -lim) dz = -lim - b.min.z; }
+    if (!dx && !dz) return;
+    o.x += dx; o.z += dz;
+    if (state.boxes.includes(o) || placing && placing.kind === 'box' && placing.obj === o) refreshBox(o); else refreshDecor(o);
+  }
+
   function finishPlacing() {
     const o = placing.obj;
     const kind = placing.kind;
@@ -3067,14 +3172,14 @@
     let r = 0;
     if (kind === 'box') r = Math.max(BOX_W, BOX_D) / 2 + 0.2;
     else if (!DECOR[o.type].wall && !DECOR[o.type].under) r = DECOR[o.type].r + 0.15;
-    if (r) clearUnder(o.x, o.z, r);
+    if (r) clearUnder(o.x, o.z, r + 0.6);
     blip(500, 0.08, 'triangle', 0.05);
     save();
   }
 
   function clearUnder(x, z, r) {
     const list = [];
-    forNear(x, z, r + 0.2, c => { if (blockedAt(c.x, c.z, 0.05)) list.push(c); });
+    forNear(x, z, r + 0.2, c => { if (blockedAt(c.x, c.z, 0.05) || inPocket(c.x, c.z)) list.push(c); });
     list.sort((a, b) => b.y - a.y).forEach(c => { removeCrayon(c); });
     list.forEach(c => addCrayon(c.x, c.z, c.c));
   }
@@ -3109,6 +3214,13 @@
       if (o.type === 'shelf' && shelfUsed(o)) { toast('Only empty shelves can be put away.'); return; }
       if (o.bins && o.bins.some(b => b.count)) { toast(`Empty every drawer first to put away the ${DECOR[o.type].name}.`); return; }
       if (o.bins) state.boxes = state.boxes.filter(b => b.parent !== o);
+      if (o.type === 'hopper') {
+        // whatever was still inside goes back on the floor, so nothing counts as sorted that isn't
+        const spill = (o.queue || []).concat(...(o.trays || []));
+        o.queue = []; o.trays = FAMILIES.map(() => []);
+        spill.forEach(c => addCrayon(o.x + rand(-1, 1), o.z + rand(-1, 1), c));
+        if (spill.length) toast(`${spill.length} crayons from the hopper spill back onto the floor.`);
+      }
       scene.remove(o.group);
       state.decor = state.decor.filter(x => x !== o);
       toast(`Put away the ${DECOR[o.type].name}.`);
@@ -3364,6 +3476,7 @@
     if (tapeMode.on) { tapeClick(); return; }
     if (beltMode.on) { beltClick(); return; }
     if (vac.on) { vacClick(); return; }
+    if (broom.on) return;   // the broom sweeps while you hold the mouse
     const hop = aim.type === 'decor' && aim.obj.type === 'hopper' ? aim.obj : null;
     if (hop && !planner.on && !carry) {
       if (tote.on && tote.items.length) { feedHopper(hop, tote.items.splice(0), camera.position.clone().add(new T.Vector3(0, -0.4, 0))); refreshTote(); }
@@ -3472,6 +3585,7 @@
     else if (e.code === 'KeyN' && !planner.on) toggleTapeMode();
     else if (e.code === 'KeyK' && !planner.on) toggleBeltMode();
     else if (e.code === 'KeyH' && !planner.on) toggleVac();
+    else if (e.code === 'KeyJ' && !planner.on && !placing) toggleBroom();
     else if (e.code === 'Enter' && beltMode.on) finishBelt();
     else if (e.code === 'Backspace' && beltMode.on) { e.preventDefault(); undoBelt(); }
     else if (e.code === 'KeyR' && vac.on && !placing) cycleVacFilter();
@@ -4360,6 +4474,31 @@
           pushCrayon({ x: f[i] / 1000, y: f[i + 1] / 1000, z: f[i + 2] / 1000, ax: f[i + 3] / 32000, ay: f[i + 4] / 32000, az: f[i + 5] / 32000, c: f[i + 6], dy: 0, vy: 0, delay: 0 });
         }
         (s.loose || []).forEach(c => addCrayon(player.x + rand(-1, 1), player.z + rand(-1, 1), c));
+        // earlier builds could lose crayons (putting away a full hopper deleted them): put them back on the floor
+        {
+          const inMachines = state.decor.reduce((n, d) => n + (d.queue || []).length + (d.trays || []).reduce((m, t) => m + t.length, 0), 0);
+          const missing = TOTAL - state.sorted - cr.length - inMachines;
+          if (missing > 0 && missing < TOTAL / 4) {
+            const per = SHADES.map(() => 0);
+            for (const o of cr) per[o.c]++;
+            state.decor.forEach(d => { (d.queue || []).forEach(c => per[c]++); (d.trays || []).forEach(t => t.forEach(c => per[c]++)); });
+            const want = SHADES.map((_, i) => Math.max(0, Math.round(TOTAL / SHADES.length) - per[i] - state.shadeSorted[i]));
+            let left = missing;
+            for (let i = 0; left > 0 && i < missing * 4; i++) {
+              let c = i % SHADES.length;
+              if (!want.some(w => w > 0)) c = randomShade(); else if (want[c] <= 0) continue;
+              want[c]--; left--;
+              addCrayon(rand(-HALF + 1, HALF - 1), rand(-HALF + 1, HALF - 1), c);
+            }
+            repairedMissing = missing;
+          }
+        }
+        // free crayons stuck in gaps behind furniture (older builds left a gap at the wall)
+        {
+          const stuck = cr.filter(o => (HALF - Math.abs(o.x) < POCKET || HALF - Math.abs(o.z) < POCKET) && (inPocket(o.x, o.z) || blockedAt(o.x, o.z, 0.02)));
+          stuck.sort((a, b) => b.y - a.y).forEach(o => removeCrayon(o));
+          stuck.forEach(o => addCrayon(o.x, o.z, o.c));
+        }
         const fv = s.furnished === true ? 1 : (s.furnished || 0);
         state.furnished = fv;
         state.tape = Array.isArray(s.tape) ? s.tape.filter(t => t && isFinite(t.x1)) : [];
@@ -4423,6 +4562,7 @@
     updateTravellers(dt);
     beltTexes.forEach(t => { t.offset.y = (t.offset.y - dt * BELT_SPEED / 0.4) % 1; });
     updateVac(dt);
+    updateBroom(dt);
     updateRainbow(dt);
     updateAchievements(dt);
     updateGlow(time);
@@ -4467,6 +4607,7 @@
     refreshHand();
     updateHud();
     $('loading').hidden = true;
+    if (repairedMissing) setTimeout(() => toast(`Found ${repairedMissing.toLocaleString()} crayons an older version lost. They are back on the floor.`), 1500);
     $('help').hidden = false;
     last = performance.now();
     requestAnimationFrame(frame);
@@ -4483,7 +4624,7 @@
   window.craySorting = {
     get state() { return state; }, get crayons() { return cr; }, get aim() { return aim; },
     player, SHADES, save, act, pickUp, tossToBox, takeFromBox, refreshBox, hand, camera, coloring, get marks() { return marks; },
-    tote, toggleTote, scoopTote, vac, toggleVac, feedHopper, toggleBeltMode, beltClick, finishBelt, get bots() { return bots; }, shadeDone, ACHIEVEMENTS, toggleTapeMode, togglePlanner, planner, tapeMode, tapeClick, storageUsed, startPlacing, finishPlacing, addBox, buildDecor, get placing() { return placing; }, openShop, celebrate, liftPacked, placeCarry, tidyShelf, get carry() { return carry; }, shelfSlotAt, packBox, lvl, boxLimit,
+    broom, toggleBroom, fitInRoom, inPocket, putAway, get repairedMissing() { return repairedMissing; }, tote, toggleTote, scoopTote, vac, toggleVac, feedHopper, toggleBeltMode, beltClick, finishBelt, get bots() { return bots; }, shadeDone, ACHIEVEMENTS, toggleTapeMode, togglePlanner, planner, tapeMode, tapeClick, storageUsed, startPlacing, finishPlacing, addBox, buildDecor, get placing() { return placing; }, openShop, celebrate, liftPacked, placeCarry, tidyShelf, get carry() { return carry; }, shelfSlotAt, packBox, lvl, boxLimit,
     setBest(n) { state.bestTotal = n; recomputeUnlocks(); applyLabels(); syncBots(); state.boxes.forEach(refreshBox); },
   };
 })();

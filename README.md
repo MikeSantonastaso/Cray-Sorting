@@ -29,9 +29,10 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Color a page on the coloring table | Hold a crayon, look at the page, click or press `V` |
 | Scribble on walls and furniture | Hold `V` while holding a crayon |
 | Take a hidden coloring page | Click it |
+| Broom | `J` to switch; hold the mouse and walk to push crayons ahead of you |
 | Tote bucket (after 1,500 sorted) | `B` to switch; click crayons to scoop any color, walk past boxes to drop each shade off, `Q` dumps it |
 | Carry a packed box to another shelf spot | Click it on the shelf, click the spot (swaps if taken). `Q` cancels, `C` on a shelf tidies it by color |
-| Place off the grid | Hold `Alt` while placing |
+| Place off the grid | Hold `Alt` while placing. Things you push against a wall sit flush with it |
 | Floor tape (after 2,500) | `N`, click points, `R` changes color, `Backspace` undoes, `Esc` exits |
 | Room planner (after 2,500) | `P` for the overhead view: `W` `A` `S` `D` pans, wheel zooms, click something to move it |
 | Conveyor belt (after 13,000) | `K`, click points, `Enter` or click the last point to finish, `Backspace` undoes |
