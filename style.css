@@ -809,3 +809,7 @@ button kbd { transform: rotate(3deg); }
 .limit b { font-family: var(--font-head); font-weight: 600; }
 .limit span { color: var(--muted); }
 .limit.full { background: #ffe3d8; }
+
+.tabs button.t-yellow.active { --btn: #fff1a8; }
+.shop-list.achievements { display: flex; flex-direction: column; gap: 12px; background-color: #fffbea; }
+.achs .up.got { background: #fff1c9; border-color: var(--yellow); }

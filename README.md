@@ -30,15 +30,23 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Scribble on walls and furniture | Hold `V` while holding a crayon |
 | Take a hidden coloring page | Click it |
 | Tote bucket (after 1,500 sorted) | `B` to switch; click crayons to scoop any color, walk past boxes to drop each shade off, `Q` dumps it |
+| Carry a packed box to another shelf spot | Click it on the shelf, click the spot (swaps if taken). `Q` cancels, `C` on a shelf tidies it by color |
+| Place off the grid | Hold `Alt` while placing |
+| Floor tape (after 2,500) | `N`, click points, `R` changes color, `Backspace` undoes, `Esc` exits |
+| Room planner (after 2,500) | `P` for the overhead view: `W` `A` `S` `D` pans, wheel zooms, click something to move it |
+| Conveyor belt (after 13,000) | `K`, click points, `Enter` or click the last point to finish, `Backspace` undoes |
+| Feed a hopper | Click it with crayons in hand, or walk up with the tote. Click it empty-handed to take a tray |
+| Roomba dock settings | Look at the dock and press `C` to pick any color, one family, or one shade |
+| Vacuum (after 25,000) | `H` to switch, hold click to suck up crayons, `R` sets the filter, walk past boxes to drop off |
 
 On phones and tablets there's an on-screen joystick for walking; drag to look and tap to act.
 
 ## Organizing and unlocks
 
-- **Boxes are free.** Make a box for any shade, as many as you want, and place it anywhere. Six boxes are in the room when you start. Crayons you sort stand up in the box, tips out, and you can take them back out any time to reorganize. Unlocks you've earned stay unlocked.
-- **Shelf units are free too.** When a box is full, click it to pack it onto the nearest shelf with room.
-- **Sorting drawers stack.** Pick Drawer in the Build menu: each one holds three boxes' worth and never needs packing. While placing a drawer, look at another drawer to stack it on top, up to 8 high. A starter tower sits between the shelves.
-- **Upgrades come from your total.** A milestone ladder runs on the most crayons you've ever had sorted at once (taking crayons back out never loses an unlock): Bigger Handfuls at 100, Comfy Sneakers at 200, Label Maker at 300, Wide Scoop at 450, Shade Spotter at 600, Roomier Boxes at 800, the Tote Bucket at 1,500, the Finder Arrow at 1,800, the Tape Gun at 2,500, and on up to three Sortbots by 22,000. The Label Maker makes box signs readable from across the room and labels drawer fronts. The Finder Arrow points to the nearest box with room for what you're carrying. Later machines (jars, floor tape, the hopper, conveyor belts, the Crayon Roomba and vacuums) show on the ladder as coming in a later update.
+- **Boxes are free, but space is limited.** Make a box for any shade and place it anywhere, but you start with room for 10 boxes and drawers and 2 shelf units. Storage Permits on the ladder raise those limits (60, 250, 450, 1,200 and on up to unlimited at 22,000), so plan where each shade lives. Crayons you sort stand up in the box, tips out, and you can take them back out any time.
+- **Organize your shelves.** A full box packs onto the nearest shelf unit with room. Click a packed box to carry it to any spot on any shelf (it swaps if the spot is taken), or press `C` on a shelf to tidy it by color.
+- **Sorting drawers stack.** Each one holds three boxes' worth and never needs packing. While placing a drawer, look at another drawer to stack it on top, up to 8 high.
+- **Upgrades come from your total.** A milestone ladder runs on the most crayons you've ever had sorted at once (taking crayons back out never loses an unlock). Bigger Handfuls grab 5, 10, 16 and then 24 crayons from a wider area. Along the way come the Label Maker, Shade Spotter, Roomier Boxes, the Tote Bucket, the Finder Arrow, jars (twice a box), floor tape and the room planner, the wagon (a 120-crayon tote), a 30-bin sorting cabinet, a rolling bin cart for one color family, the hopper, conveyor belts, Crayon Roombas with docks, the vacuum and its shade filters. The Rainbow Wall lights each stripe as you finish a shade, and the Collection has 17 achievements.
 - **Furniture comes from colors.** Sorting 150 of a color family unlocks a piece of decor (plant, rug, lamp, beanbag, fish bowl, cat bed, poster, clock, window, fairy lights). The Collection screen shows what's next.
 
 ## Furniture and coloring books
@@ -53,7 +61,7 @@ On phones and tablets there's an on-screen joystick for walking; drag to look an
 - `style.css`: the crayon-box UI (paper tags, chunky crayon-colored buttons, cardboard menus). Uses the Fredoka and Patrick Hand fonts from Google Fonts, with system fallbacks offline
 - `game.js`: the whole game (3D scene, crayon piles, controls, unlocks, saving)
 - `vendor/three.min.js`, `vendor/GLTFLoader.js`: Three.js r128 and its glTF loader (MIT, see `vendor/three.LICENSE`)
-- `assets/models/*.glb`: 3D models, with textures shrunk for the web. `models.js` embeds them as base64 so the game runs from `file://`; rebuild it with `python3 tools/pack-models.py`. `roomba.glb` is saved for the Crayon Roomba update and isn't loaded yet.
+- `assets/models/*.glb`: 3D models, with textures shrunk for the web. `models.js` embeds them as base64 so the game runs from `file://`; rebuild it with `python3 tools/pack-models.py`.
 - `assets/crayon_wrapper.jpg`: the crayon wrapper mask (also embedded in `game.js` so the game runs from `file://`)
 
 ## Credits
@@ -67,4 +75,4 @@ The crayon wrapper artwork is adapted from ["crayons w/ box"](https://sketchfab.
 - ["Quick little toy rocket"](https://sketchfab.com/3d-models/quick-little-toy-rocket-58a99811d3a6477885be82d00da5ae40) by naam (base plate removed)
 - ["Cartoony Rubber Ducky"](https://sketchfab.com/3d-models/cartoony-rubber-ducky-8a6e661916b74f9caa1c20dd6fdf77ad) by Xabier Garcia
 - ["Optimized Potted Plants"](https://sketchfab.com/3d-models/optimized-potted-plants-967b4bf23fac4098993776fcfc2d3318) by Nicholas-3D (potted and tall plants)
-- ["Robot vacuum cleaner low poly"](https://sketchfab.com/3d-models/robot-vacuum-cleaner-low-poly-7230d8d80e8b4a82b4a34a5e7926d0d3) by Moryak (saved for the Crayon Roomba)
+- ["Robot vacuum cleaner low poly"](https://sketchfab.com/3d-models/robot-vacuum-cleaner-low-poly-7230d8d80e8b4a82b4a34a5e7926d0d3) by Moryak (Crayon Roomba)

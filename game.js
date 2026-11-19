@@ -68,6 +68,9 @@
     duck:     { name: 'Rubber Duck',        icon: '🦆', r: 0.35, cy: 0.1,  free: true, desc: 'A friendly rubber duck to keep you company.' },
     cabinet:  { name: '30-Drawer Cabinet',  icon: '🗃️', r: 1.0,  cy: 0.8,  bins: true, desc: 'One drawer for every shade, 10 color families across. Takes one storage spot. Fill all three shades of a family for a complete set.' },
     cart:     { name: 'Rolling Cart',       icon: '🛒', r: 0.55, cy: 0.5,  bins: true, desc: 'Three drawers for one color family. Walk into it to push it wherever you are working. C on an empty cart changes its family.' },
+    hopper:   { name: 'Sorter Hopper',      icon: '🎰', r: 0.8,  cy: 0.9,  desc: 'Toss in mixed crayons. It drops each one into a box right beside it or onto a belt, and keeps the rest in family trays you can empty.' },
+    dock:     { name: 'Roomba Dock',        icon: '🔌', r: 0.35, cy: 0.1,  desc: 'Roombas park here. Put it next to a hopper and they unload into it. C sets which crayons its roombas collect.' },
+    rainbow:  { name: 'Rainbow Wall',       icon: '🌈', r: 1.5,  wall: true, free: true, desc: 'One stripe per shade. Each fills as that shade leaves the floor, and the wall lights up when every crayon is sorted.' },
     teddy:    { name: 'Teddy Bear',         icon: '🧸', r: 0.45, cy: 0.25, free: true, desc: 'A sleepy teddy in a yellow raincoat.' },
   };
 
@@ -79,8 +82,13 @@
     bigBox:   { name: 'Roomier Boxes',   icon: '📦', info: l => `Boxes hold ${boxCap(l)} crayons` },
     speed:    { name: 'Comfy Sneakers',  icon: '👟', info: l => `Walk ${l * 15}% faster` },
     autoPack: { name: 'Tape Gun',        icon: '🧷', info: () => 'Full boxes pack themselves' },
-    bots:     { name: 'Sortbot',         icon: '🤖', info: l => `${l} little robot${l > 1 ? 's' : ''} sorting alongside you` },
-    botSpeed: { name: 'Sortbot Turbo',   icon: '⚙️', info: () => 'Sortbots drive faster and carry more' },
+    bots:     { name: 'Crayon Roomba',   icon: '🧹', info: l => `${l} roomba${l > 1 ? 's' : ''} scooping crayons and bringing them to the hopper (or straight to their boxes)` },
+    botCarry: { name: 'Roomba Bin',      icon: '🧺', info: l => `Roombas carry ${botCarry(l)} crayons a trip` },
+    botSpeed: { name: 'Roomba Turbo',    icon: '⚙️', info: () => 'Roombas drive faster' },
+    belts:    { name: 'Conveyor Belts',  icon: '➰', info: () => 'K lays belts from a hopper to your boxes; they carry each shade to its home' },
+    vacuum:   { name: 'Crayon Vacuum',   icon: '🌀', info: () => 'H for the vacuum: hold the mouse to suck up a 200-crayon bag, then empty it into the hopper' },
+    colorVac: { name: 'Color Vacuum and Color Roomba', icon: '🎯', info: () => 'R with the vacuum targets one color family; set docks to a family too' },
+    shadeVac: { name: 'Shade Vacuum and Shade Roomba', icon: '🔍', info: () => 'Target one exact shade with the vacuum or a dock, and it goes straight into that shade\'s box' },
     labels:   { name: 'Label Maker',     icon: '🏷️', info: () => 'Box signs show from across the room, and drawers get name labels' },
     tote:     { name: 'Tote Bucket',     icon: '🪣', info: l => `Press B for the tote: scoop ${toteCap(l)} crayons of any color, and boxes you walk past take their own shade` },
     jars:     { name: 'Crayon Jars',     icon: '🫙', info: () => 'See-through jars that hold twice a box and show how full they are (E → Boxes)' },
@@ -125,18 +133,21 @@
     { at: 7000, up: 'storage' },
     { at: 7500, up: 'tote' },
     { at: 9000, up: 'hand' },
-    { at: 9000, soon: 'Sorter Hopper', icon: '🎰' },
-    { at: 11000, up: 'bots' },
+    { at: 9000, decor: 'hopper' },
     { at: 12000, up: 'bigBox' },
-    { at: 13000, soon: 'Conveyor Belts', icon: '➰' },
-    { at: 15000, up: 'bots' },
-    { at: 18000, up: 'botSpeed' },
-    { at: 18000, soon: 'Crayon Roomba', icon: '🧹' },
+    { at: 13000, up: 'belts' },
+    { at: 18000, up: 'bots' },
+    { at: 18000, decor: 'dock' },
+    { at: 20000, up: 'botCarry' },
     { at: 22000, up: 'bots' },
-    { at: 25000, soon: 'Crayon Vacuum', icon: '🌀' },
-    { at: 35000, soon: 'Color Vacuum and Color Roomba', icon: '🌀' },
-    { at: 45000, soon: 'Shade Vacuum and Shade Roomba', icon: '🌀' },
-    { at: 60000, soon: 'Rainbow Wall', icon: '🌈' },
+    { at: 24000, up: 'botSpeed' },
+    { at: 25000, up: 'vacuum' },
+    { at: 27000, up: 'bots' },
+    { at: 30000, up: 'botCarry' },
+    { at: 33000, up: 'bots' },
+    { at: 35000, up: 'colorVac' },
+    { at: 45000, up: 'shadeVac' },
+    { at: 60000, goal: 'Rainbow Wall lights up', icon: '🌈' },
   ];
 
   // Color milestones are cosmetic: sort enough of one color family to unlock its decoration.
@@ -153,8 +164,8 @@
     /* Teals   */ [{ decor: 'fishbowl' }],
     /* Grays   */ [{ decor: 'window' }],
   ];
-  const rewardName = r => r.soon ? r.soon : r.up ? UPGRADES[r.up].name : DECOR[r.decor].name;
-  const rewardIcon = r => r.soon ? r.icon : r.up ? UPGRADES[r.up].icon : DECOR[r.decor].icon;
+  const rewardName = r => r.goal || (r.soon ? r.soon : r.up ? UPGRADES[r.up].name : DECOR[r.decor].name);
+  const rewardIcon = r => r.goal || r.soon ? r.icon : r.up ? UPGRADES[r.up].icon : DECOR[r.decor].icon;
 
   const handSize = l => [1, 5, 10, 16, 24][Math.min(l, 4)];
   const scoop = l => 0.45 + l * 0.4;   // the reach grows with your handful
@@ -165,9 +176,9 @@
   const shelfLimit = l => SHELF_LIMITS[Math.min(l, SHELF_LIMITS.length - 1)];
   const limTxt = n => n === Infinity ? 'unlimited' : String(n);
   const boxCap = l => 30 + l * 15;
-  const botCarry = l => 2 + l * 2;
+  const botCarry = l => [3, 6, 10][Math.min(l, 2)];
   const walkSpeed = l => 4 * (1 + l * 0.15);
-  const toteCap = l => lvl('wagon') ? 120 : [0, 15, 25, 40][Math.min(l, 3)];
+  const toteCap = l => vac.on ? VAC_CAP : lvl('wagon') ? 120 : [0, 15, 25, 40][Math.min(l, 3)];
   // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
@@ -202,6 +213,9 @@
       boxes: [],
       decor: [],
       tape: [],
+      belts: [],
+      ach: {},
+      shadeTotal: null,
       player: { x: 0, z: 10, yaw: 0, pitch: -0.3 },
       done: false,
     };
@@ -1215,6 +1229,7 @@
     teddy:     { src: 'teddy',  h: 0.42, rot: [Math.PI / 2, 0, 0] },
     duck:      { src: 'duck',   h: 0.17 },
     rocket:    { src: 'rocket', h: 0.46, skipFlat: true },
+    roomba:    { src: 'roomba', h: 0.12 },
     plant:     { src: 'plants', h: 1.05, keep: ['Pot_1'] },
     tallplant: { src: 'plants', h: 1.95, keep: ['Pot_10'] },
   };
@@ -1548,6 +1563,61 @@
         const bar = mesh(new T.CylinderGeometry(0.018, 0.018, 0.9, 8), metal, 0, 1.05, -0.22); bar.rotation.z = Math.PI / 2; g.add(bar);
         ensureBins(d, cartLayout(d.fam));
         d.bins.forEach(b => buildBin(b, g));
+        break;
+      }
+      case 'rainbow': {
+        g.add(mesh(new T.BoxGeometry(3.0, 1.5, 0.05), std(0xfff7ea, { roughness: 0.8 }), 0, 0, 0.025));
+        g.add(mesh(new T.BoxGeometry(3.1, 0.08, 0.07), std(0xc28a5a), 0, 0.77, 0.035));
+        g.add(mesh(new T.BoxGeometry(3.1, 0.08, 0.07), std(0xc28a5a), 0, -0.77, 0.035));
+        const stripes = SHADES.map((sh, i) => {
+          const fam = Math.floor(i / 3), k = i % 3;
+          const x = -1.38 + fam * 0.31 + (k - 1) * 0.085;
+          g.add(mesh(new T.BoxGeometry(0.07, 1.2, 0.01), std(new T.Color(sh.hex).lerp(new T.Color(0xfff7ea), 0.72)), x, 0, 0.055, false));
+          const m = mesh(new T.BoxGeometry(0.07, 1.2, 0.02), new T.MeshStandardMaterial({ color: sh.hex, roughness: 0.5, emissive: sh.hex, emissiveIntensity: 0 }), x, 0, 0.065, false);
+          m.userData.x = x; g.add(m); return m;
+        });
+        d.refreshStripes = all => stripes.forEach((m, i) => {
+          const f = shadeDone[i];
+          m.visible = f > 0.002;
+          m.scale.y = Math.max(0.002, f);
+          m.position.y = -0.6 + 0.6 * m.scale.y;
+          m.material.emissiveIntensity = f >= 1 ? (all ? 0.8 : 0.35) : 0;
+        });
+        d.refreshStripes(false);
+        break;
+      }
+      case 'hopper': {
+        const metal = std(0x6fa8dc, { roughness: 0.35, metalness: 0.25 }), dark = std(0x2d3a4a), yellow = std(0xffd23f);
+        for (const [x, z] of [[-0.5, -0.3], [0.5, -0.3], [-0.5, 0.3], [0.5, 0.3]]) g.add(mesh(new T.BoxGeometry(0.06, 0.5, 0.06), dark, x, 0.25, z));
+        g.add(mesh(new T.BoxGeometry(1.2, 0.8, 0.75), metal, 0, 0.9, 0));
+        const funnel = mesh(new T.CylinderGeometry(0.62, 0.2, 0.6, 20, 1, true), new T.MeshStandardMaterial({ color: 0xffd23f, roughness: 0.4, side: T.DoubleSide }), 0, 1.6, 0);
+        g.add(funnel);
+        const rim = mesh(new T.TorusGeometry(0.62, 0.03, 6, 24), dark, 0, 1.9, 0); rim.rotation.x = Math.PI / 2; g.add(rim);
+        const fill = mesh(new T.SphereGeometry(0.45, 14, 8, 0, TAU, 0, Math.PI / 2), null, 0, 1.45, 0, false);
+        fill.material = new T.MeshStandardMaterial({ map: canvasTex(64, 64, (c, w, h) => { const cols = SHADES.map(x => x.hex); for (let i = 0; i < 80; i++) { c.fillStyle = cols[(i * 7) % cols.length]; c.fillRect((i * 37) % w, (i * 23) % h, 10, 4); } }), roughness: 0.7 });
+        d.funnelFill = fill; g.add(fill);
+        // ten family trays along the front, one per chute
+        d.trayMeshes = FAMILIES.map((f, fi) => {
+          const x = -0.5 + (fi % 5) * 0.25, y = fi < 5 ? 0.6 : 0.95, z = 0.42;
+          g.add(mesh(new T.BoxGeometry(0.22, 0.12, 0.16), std(f.shades[1][1], { roughness: 0.6 }), x, y, z));
+          const m = mesh(new T.BoxGeometry(0.18, 0.16, 0.12), std(f.shades[0][1], { roughness: 0.8 }), x, y, z, false);
+          m.userData.base = y; m.visible = false; g.add(m);
+          return m;
+        });
+        g.add(mesh(new T.BoxGeometry(1.2, 0.04, 0.04), yellow, 0, 1.3, 0.38));
+        d.light = mesh(new T.SphereGeometry(0.05, 10, 8), new T.MeshBasicMaterial({ color: 0x555555 }), 0.48, 1.22, 0.38, false);
+        g.add(d.light);
+        if (!d.queue) d.queue = [];
+        if (!d.trays) d.trays = FAMILIES.map(() => []);
+        refreshHopper(d);
+        break;
+      }
+      case 'dock': {
+        if (!d.mode) d.mode = 'any';
+        g.add(mesh(new T.CylinderGeometry(0.34, 0.36, 0.04, 24), std(0xf4f6f8, { roughness: 0.4 }), 0, 0.02, 0));
+        g.add(mesh(new T.BoxGeometry(0.3, 0.22, 0.08), std(0xf4f6f8, { roughness: 0.4 }), 0, 0.13, -0.3));
+        const lamp = mesh(new T.SphereGeometry(0.03, 8, 6), new T.MeshBasicMaterial({ color: d.mode === 'any' ? 0x3f8fe8 : SHADES[d.mode[0] === 'f' ? +d.mode.slice(1) * 3 + 1 : +d.mode.slice(1)].hex }), 0, 0.2, -0.25, false);
+        g.add(lamp);
         break;
       }
       case 'blocks': {
@@ -2115,10 +2185,14 @@
     tote.t -= dt;
     if (tote.t > 0) return;
     tote.t = 0.3;
+    const reach = lvl('wagon') ? 2.5 : 1.5;
     for (const b of state.boxes) {
-      if (Math.hypot(b.x - player.x, b.z - player.z) < (lvl('wagon') ? 2.5 : 1.5)) depositTote(b, true);
+      if (Math.hypot(b.x - player.x, b.z - player.z) < reach) depositTote(b, true);
       if (!tote.items.length) break;
     }
+    // whatever no box wanted goes into a hopper you walk past
+    const h = tote.items.length && !vac.on && nearestHopper(player.x, player.z, reach + 0.6);
+    if (h) { feedHopper(h, tote.items.splice(0), camera.position.clone().add(new T.Vector3(0, -0.4, 0))); refreshTote(); }
   }
 
   // ---------------------------------------------------------------------------
@@ -2323,6 +2397,182 @@
   canvas.addEventListener('wheel', e => { if (planner.on) { planner.h = clamp(planner.h + Math.sign(e.deltaY) * 2, 12, 34); e.preventDefault(); } }, { passive: false });
 
   // ---------------------------------------------------------------------------
+  // Vacuums (H): hold the mouse to suck crayons into a 200-crayon bag.
+  // Aim it at everything, one color family, or one exact shade (R).
+  // The bag works like the tote: boxes take their own shade, the hopper takes the rest.
+  // ---------------------------------------------------------------------------
+  const VAC_CAP = 200;
+  const vac = { on: false, filter: 'any', acc: 0, held: false, hum: 0 };
+  const vacGroup = new T.Group();
+  {
+    const body = std(0x9b6bdb, { roughness: 0.4 }), dark = std(0x2d3a4a);
+    vacGroup.add(mesh(new T.CylinderGeometry(0.035, 0.035, 0.7, 10), std(0xc0c4cc, { metalness: 0.4, roughness: 0.3 }), 0, -0.05, -0.3, false));
+    vacGroup.children[0].rotation.x = 1.2;
+    vacGroup.add(mesh(new T.BoxGeometry(0.26, 0.05, 0.12), dark, 0, -0.2, -0.62, false));
+    vacGroup.add(mesh(new T.CylinderGeometry(0.09, 0.09, 0.2, 14), body, 0.05, 0.12, 0.0, false));
+    const bag = mesh(new T.SphereGeometry(0.1, 12, 10), std(0xffd23f, { roughness: 0.8 }), 0.05, 0.27, 0.0, false);
+    vacGroup.userData.bag = bag; vacGroup.add(bag);
+    vacGroup.position.set(0.3, -0.36, -0.55);
+    vacGroup.scale.setScalar(0.6);
+    vacGroup.visible = false;
+    camera.add(vacGroup);
+  }
+  function toggleVac() {
+    if (!lvl('vacuum')) { toast('The crayon vacuum unlocks at 25,000 crayons sorted.'); return; }
+    if (carry) { toast('Put the box you are carrying on a shelf first.'); return; }
+    if (vac.on) {
+      vac.on = false; tote.on = false;
+      if (tote.items.length) { const h = nearestHopper(player.x, player.z, 4); if (h) feedHopper(h, tote.items.splice(0), camera.position.clone()); else dumpTote(); }
+      refreshTote(); vacGroup.visible = false;
+      return;
+    }
+    if (tote.on) { toggleTote(); if (tote.on) return; }
+    if (hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
+    vac.on = true; tote.on = true; tote.items = tote.items || [];
+    refreshTote(); toteGroup.visible = false; vacGroup.visible = true;
+    toast(`Vacuum on (${modeName(vac.filter)}). Hold the mouse to suck crayons up.`);
+  }
+  function cycleVacFilter() {
+    updateAim();
+    const c = aim.type === 'crayon' ? aim.obj.c : -1;
+    const opts = ['any'];
+    if (c >= 0 && lvl('colorVac')) opts.push('f' + SHADES[c].family);
+    if (c >= 0 && lvl('shadeVac')) opts.push('s' + c);
+    if (opts.length === 1) { vac.filter = 'any'; toast(lvl('colorVac') ? 'Look at a crayon and press R to target its color.' : 'Targeting one color family unlocks at 35,000 sorted.'); return; }
+    const i = opts.indexOf(vac.filter);
+    vac.filter = opts[(i + 1) % opts.length];
+    toast(`Vacuum set to ${modeName(vac.filter)}.`);
+  }
+  function vacClick() {
+    if (aim.type === 'box') depositTote(aim.obj);
+    else if (aim.type === 'decor' && aim.obj.type === 'hopper') {
+      if (tote.items.length) { feedHopper(aim.obj, tote.items.splice(0), camera.position.clone()); refreshTote(); }
+      else toast('The bag is empty. Hold the mouse to vacuum.');
+    }
+  }
+  const _vp = new T.Vector3();
+  function updateVac(dt) {
+    if (!vac.on) return;
+    vacGroup.userData.bag.scale.setScalar(0.6 + tote.items.length / VAC_CAP * 1.2);
+    if (!vac.held || anyModal() || placing) { vac.acc = 0; return; }
+    if (tote.items.length >= VAC_CAP) { if (!vac.fullWarn) { toast('The bag is full! Empty it into the hopper or walk past boxes.'); vac.fullWarn = true; } return; }
+    vac.fullWarn = false;
+    vac.acc += dt * 40;
+    const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
+    const cx = player.x + fx * 1.1, cz = player.z + fz * 1.1;
+    const cands = [];
+    forNear(cx, cz, 0.9, o => { if (!o.dead && !o.claimed && o.delay <= 0 && modeMatch(vac.filter, o.c) && (o.x - cx) ** 2 + (o.z - cz) ** 2 < 0.81) cands.push(o); });
+    if (!cands.length) { vac.acc = Math.min(vac.acc, 1); return; }
+    cands.sort((a, b) => b.y - a.y);
+    vacGroup.localToWorld(_vp.set(0, -0.2, -0.62));
+    let n = 0;
+    while (vac.acc >= 1 && cands.length && tote.items.length < VAC_CAP) {
+      const o = cands.shift(); vac.acc -= 1;
+      removeCrayon(o);
+      tote.items.push(o.c);
+      if (n++ < 3) startFlight(o.c, new T.Vector3(o.x, o.y, o.z), _vp, 0, () => {});
+    }
+    refreshTote(); toteGroup.visible = false;
+    vac.hum -= dt;
+    if (vac.hum <= 0) { blip(90 + Math.random() * 20, 0.12, 'sawtooth', 0.015); vac.hum = 0.12; }
+  }
+  canvas.addEventListener('pointerdown', () => { vac.held = true; });
+  window.addEventListener('pointerup', () => { vac.held = false; });
+
+  // Roomba docks: choose what their roombas collect
+  function openDockPicker(dock) {
+    if (locked) document.exitPointerLock();
+    $('pickerTitle').textContent = 'What should roombas from this dock collect?';
+    const list = $('pickerList');
+    list.innerHTML = '';
+    const add = (mode, label, hex, enabled, note) => {
+      const btn = document.createElement('button');
+      btn.innerHTML = `${hex ? `<span class="sw" style="background:${hex}"></span>` : '🌈 '}<span>${label}<small>${note}</small></span>`;
+      btn.disabled = !enabled;
+      btn.onclick = () => { dock.mode = mode; rebuildDecor(dock); save(); closeModals(); toast(`This dock's roombas now collect ${modeName(mode)}.`); };
+      list.appendChild(btn);
+    };
+    add('any', 'Any color', null, true, 'Brought to the hopper');
+    FAMILIES.forEach((f, fi) => add('f' + fi, f.name, f.shades[1][1], lvl('colorVac') > 0, lvl('colorVac') ? 'Straight to their boxes' : 'Unlocks at 35,000'));
+    SHADES.forEach((sh, i) => add('s' + i, sh.name, sh.hex, lvl('shadeVac') > 0, lvl('shadeVac') ? 'Straight to its box' : 'Unlocks at 45,000'));
+    $('picker').hidden = false;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rainbow wall: each shade's stripe fills as that shade leaves the floor
+  // ---------------------------------------------------------------------------
+  const shadeDone = SHADES.map(() => 0);
+  const floorByShade = SHADES.map(() => 0);
+  let rainbowT = 0;
+  function countShades() {
+    floorByShade.fill(0);
+    for (let i = 0; i < cr.length; i++) floorByShade[cr[i].c]++;
+  }
+  function updateRainbow(dt) {
+    rainbowT -= dt;
+    if (rainbowT > 0) return;
+    rainbowT = 2;
+    countShades();
+    if (!state.shadeTotal || state.shadeTotal.length !== SHADES.length) {
+      // older saves: estimate each shade's total from what's left plus what's stored
+      const t = floorByShade.slice();
+      state.boxes.forEach(b => { t[b.color] += b.count; });
+      state.decor.forEach(d => { if (d.type === 'shelf') d.packed.forEach(c => { if (c != null) t[c] += capacity(); }); });
+      state.shadeTotal = t.map((n, i) => Math.max(n, state.shadeSorted[i] + floorByShade[i], 1));
+    }
+    let all = true;
+    SHADES.forEach((_, i) => {
+      shadeDone[i] = clamp(1 - floorByShade[i] / state.shadeTotal[i], 0, 1);
+      if (floorByShade[i] > 0) all = false;
+    });
+    state.decor.forEach(d => { if (d.type === 'rainbow' && d.refreshStripes) d.refreshStripes(all); });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Achievements: sorting, room goals, and coloring
+  // ---------------------------------------------------------------------------
+  const ACHIEVEMENTS = [
+    { id: 'sort100', icon: '🖍️', name: 'First Handfuls', desc: 'Sort 100 crayons', test: () => state.bestTotal >= 100 },
+    { id: 'sort1k', icon: '📦', name: 'Getting Somewhere', desc: 'Sort 1,000 crayons', test: () => state.bestTotal >= 1000 },
+    { id: 'sort10k', icon: '🏗️', name: 'Serious Sorter', desc: 'Sort 10,000 crayons', test: () => state.bestTotal >= 10000 },
+    { id: 'sort30k', icon: '⛰️', name: 'Halfway Up the Mountain', desc: 'Sort 30,000 crayons', test: () => state.bestTotal >= 30000 },
+    { id: 'sortAll', icon: '🌈', name: 'Every Last Crayon', desc: 'Sort all 60,000', test: () => state.done },
+    { id: 'homes', icon: '🏠', name: 'A Home for Every Shade', desc: 'Have a box, drawer or jar for all 30 shades', test: () => new Set(state.boxes.map(b => b.color)).size >= SHADES.length },
+    { id: 'door', icon: '🚪', name: 'Clear a Path to the Door', desc: 'No crayons in front of the door', test: () => !cr.some(c => c.x < -9.6 && Math.abs(c.z + 3) < 1.1) },
+    { id: 'pack10', icon: '🗄️', name: 'Shelf Stocker', desc: 'Have 10 packed boxes on shelves', test: () => state.decor.reduce((n, d) => n + (d.type === 'shelf' ? shelfUsed(d) : 0), 0) >= 10 },
+    { id: 'tower', icon: '🗼', name: 'Tower of Drawers', desc: `Stack drawers ${STACK_MAX} high`, test: () => state.boxes.some(b => isDrawer(b) && b.level >= STACK_MAX - 1) },
+    { id: 'set', icon: '🏆', name: 'Complete Set', desc: 'Fill every shade of a family in the cabinet', test: () => state.decor.some(d => d.sets && d.sets.some(Boolean)) },
+    { id: 'zones', icon: '📐', name: 'Zone Planner', desc: 'Lay 10 lanes of floor tape', test: () => state.tape.length >= 10 },
+    { id: 'factory', icon: '🏭', name: 'Factory Floor', desc: 'Run a conveyor belt from a hopper', test: () => state.belts.some(b => b.pts.length > 1 && nearestHopper(b.pts[0][0], b.pts[0][1], 2.4)) },
+    { id: 'shade1', icon: '✅', name: 'One Shade Done', desc: 'Clear every crayon of one shade off the floor', test: () => floorByShade.some((n, i) => n === 0 && state.shadeTotal && state.shadeTotal[i] > 0) && cr.length < TOTAL },
+    { id: 'page1', icon: '🔎', name: 'Hidden Treasure', desc: 'Find a hidden coloring page', test: () => [...coloring.found].some(i => !STARTER_PAGES.includes(i)) },
+    { id: 'pagesAll', icon: '📚', name: 'Full Coloring Book', desc: 'Find all 10 coloring pages', test: () => coloring.found.size >= PAGES.length },
+    { id: 'colorAll', icon: '🎨', name: 'Gallery Opening', desc: 'Color every coloring page', test: () => PAGES.every((_, i) => coloring.strokes[i] > 0) },
+    { id: 'scribble', icon: '✏️', name: 'Wall Artist', desc: 'Scribble 500 marks around the room', test: () => marks.length >= 500 },
+  ];
+  let achT = 1, achFirst = true;
+  function updateAchievements(dt) {
+    achT -= dt;
+    if (achT > 0) return;
+    achT = 2.5;
+    if (!state.ach) state.ach = {};
+    const fresh = [];
+    for (const a of ACHIEVEMENTS) {
+      if (state.ach[a.id]) continue;
+      let ok = false;
+      try { ok = a.test(); } catch (e) { ok = false; }
+      if (ok) { state.ach[a.id] = Date.now(); fresh.push(a); }
+    }
+    // the first check after loading is quiet, so an old save doesn't fire a dozen banners
+    if (fresh.length && !achFirst) {
+      const a = fresh[0];
+      celebrate(`${a.icon} Achievement: ${a.name}!`, a.desc + (fresh.length > 1 ? ` (and ${fresh.length - 1} more)` : ''));
+      save();
+    }
+    achFirst = false;
+  }
+
+  // ---------------------------------------------------------------------------
   // Finder arrow: points at the nearest box with room for what you're carrying
   // ---------------------------------------------------------------------------
   const finderEl = $('finder');
@@ -2389,117 +2639,370 @@
   }
 
   // ---------------------------------------------------------------------------
-  // Sortbots
+  // Machines: the sorter hopper, conveyor belts, and crayon roombas
   // ---------------------------------------------------------------------------
-  const bots = [];
-  function buildBot() {
-    const g = new T.Group();
-    g.add(mesh(new T.SphereGeometry(0.3, 20, 14), std(0xe9edf2, { roughness: 0.4 }), 0, 0.3, 0));
-    g.add(mesh(new T.BoxGeometry(0.34, 0.14, 0.1), std(0x2d3a4a, { roughness: 0.3 }), 0, 0.36, 0.26));
-    const eye = new T.MeshStandardMaterial({ color: 0x7ff0c0, emissive: 0x7ff0c0, emissiveIntensity: 0.9 });
-    g.add(mesh(new T.SphereGeometry(0.03, 8, 6), eye, -0.07, 0.36, 0.31, false));
-    g.add(mesh(new T.SphereGeometry(0.03, 8, 6), eye, 0.07, 0.36, 0.31, false));
-    g.add(mesh(new T.CylinderGeometry(0.01, 0.01, 0.18, 6), std(0x9aa6b2), 0, 0.66, 0));
-    g.add(mesh(new T.SphereGeometry(0.04, 8, 6), std(0xff6b6b, { emissive: 0xff3030, emissiveIntensity: 0.6 }), 0, 0.76, 0, false));
-    const carry = new T.Mesh(crayonGeo, shadeMats[0]);
-    carry.position.set(0, 0.45, 0.33);
-    carry.rotation.y = Math.PI / 2;
-    carry.visible = false;
-    g.add(carry);
-    scene.add(g);
-    return { g, carry };
-  }
-  function syncBots() {
-    while (bots.length < lvl('bots')) {
-      const { g, carry } = buildBot();
-      bots.push({ g, carryMesh: carry, x: rand(-6, 6), z: rand(-6, 6), y: 0, state: 'idle', target: null, box: null, carry: [], wait: rand(0, 1), bob: Math.random() * 6 });
+  const HOPPER_RATE = 6;      // crayons a second it sorts
+  const TRAY_CAP = 40;        // crayons each family tray holds
+  const hoppers = () => state.decor.filter(d => d.type === 'hopper');
+  function nearestHopper(x, z, maxD = Infinity) {
+    let best = null, bd = maxD * maxD;
+    for (const h of hoppers()) {
+      if (placing && placing.obj === h) continue;
+      const d = (h.x - x) ** 2 + (h.z - z) ** 2;
+      if (d < bd) { bd = d; best = h; }
     }
+    return best;
   }
-
-  function boxWithSpace(c, x, z) {
-    let best = null, bd = Infinity;
+  const hopperMouth = h => new T.Vector3(h.x, 2.0, h.z);
+  function feedHopper(h, list, from) {
+    if (!list.length) return;
+    if (!h.queue) h.queue = [];
+    const mouth = hopperMouth(h);
+    list.forEach((c, i) => {
+      if (from && i < 12) startFlight(c, from, mouth, i * 0.04, () => {});
+      h.queue.push(c);
+    });
+    blip(330, 0.12, 'triangle', 0.05);
+  }
+  // Where a crayon of shade c can go from this hopper: a box right by the chutes, or the far end of a belt
+  function storageNear(c, x, z, r) {
+    let best = null, bd = r * r;
     for (const b of state.boxes) {
-      if (b.color !== c || b.count + b.incoming >= capOf(b)) continue;
-      if (placing && placing.obj === b) continue;
+      if (b.color !== c || b.count + b.incoming >= capOf(b) || (placing && (placing.obj === b || placing.obj === b.parent))) continue;
       const d = (b.x - x) ** 2 + (b.z - z) ** 2;
       if (d < bd) { bd = d; best = b; }
     }
     return best;
   }
+  function routeFor(h, c) {
+    const direct = storageNear(c, h.x, h.z, 2.2);
+    if (direct) return { box: direct, pts: null };
+    for (const belt of state.belts) {
+      const p0 = belt.pts[0], pn = belt.pts[belt.pts.length - 1];
+      if (belt.pts.length < 2 || (p0[0] - h.x) ** 2 + (p0[1] - h.z) ** 2 > 2.4 * 2.4) continue;
+      const box = storageNear(c, pn[0], pn[1], 1.8);
+      if (box) return { box, pts: belt.pts };
+    }
+    return null;
+  }
+  const travellers = [];
+  function sendCrayon(h, c, route) {
+    const box = route.box;
+    box.incoming++;
+    const land = () => {
+      box.incoming = Math.max(0, box.incoming - 1);
+      if (state.boxes.includes(box) && box.color === c && box.count < capOf(box)) {
+        box.count++; recordSort(c, false); refreshBox(box);
+        if (isBin(box)) checkSet(box);
+        if (box.count >= capOf(box) && lvl('autoPack')) setTimeout(() => packBox(box), 400);
+      } else addCrayon(box.x + rand(-0.8, 0.8), box.z + rand(-0.8, 0.8), c);
+    };
+    const to = new T.Vector3(box.x, boxBase(box) + (boxTopY(box) - boxBase(box)) * 0.6, box.z);
+    if (!route.pts) { startFlight(c, new T.Vector3(h.x, 0.9, h.z), to, 0, land); return; }
+    const m = new T.Mesh(crayonGeo, shadeMats[c]);
+    scene.add(m);
+    const pts = route.pts.map(([x, z]) => new T.Vector3(x, BELT_Y + 0.06, z));
+    travellers.push({ m, c, pts, i: 0, s: 0, to, land });
+  }
+  function updateTravellers(dt) {
+    for (let k = travellers.length - 1; k >= 0; k--) {
+      const t = travellers[k];
+      let move = BELT_SPEED * dt;
+      while (move > 0 && t.i < t.pts.length - 1) {
+        const a = t.pts[t.i], b = t.pts[t.i + 1], len = a.distanceTo(b);
+        if (t.s + move < len) { t.s += move; move = 0; } else { move -= len - t.s; t.s = 0; t.i++; }
+      }
+      if (t.i >= t.pts.length - 1) {
+        scene.remove(t.m); travellers.splice(k, 1);
+        startFlight(t.c, t.pts[t.pts.length - 1], t.to, 0, t.land);
+        continue;
+      }
+      const a = t.pts[t.i], b = t.pts[t.i + 1];
+      t.m.position.lerpVectors(a, b, t.s / a.distanceTo(b));
+      t.m.rotation.set(0, Math.atan2(b.x - a.x, b.z - a.z), 0);
+    }
+  }
+  function updateHoppers(dt) {
+    for (const h of hoppers()) {
+      if (!h.queue) h.queue = [];
+      if (!h.trays) h.trays = FAMILIES.map(() => []);
+      if (placing && placing.obj === h) continue;
+      h.acc = (h.acc || 0) + dt * HOPPER_RATE;
+      h.busy = Math.max(0, (h.busy || 0) - dt);
+      let changed = false;
+      while (h.acc >= 1) {
+        h.acc -= 1;
+        // trays first: anything that now has somewhere to go leaves its tray
+        let sent = false;
+        for (let f = 0; f < h.trays.length && !sent; f++) {
+          const tray = h.trays[f];
+          for (let i = 0; i < tray.length; i++) {
+            const r = routeFor(h, tray[i]);
+            if (r) { sendCrayon(h, tray.splice(i, 1)[0], r); sent = changed = true; break; }
+          }
+        }
+        if (sent) { h.busy = 0.5; continue; }
+        if (!h.queue.length) { h.acc = 0; break; }
+        const c = h.queue[0], r = routeFor(h, c);
+        if (r) { h.queue.shift(); sendCrayon(h, c, r); h.busy = 0.5; changed = true; continue; }
+        const tray = h.trays[SHADES[c].family];
+        if (tray.length < TRAY_CAP) { h.queue.shift(); tray.push(c); h.busy = 0.5; changed = true; continue; }
+        h.acc = 0; break;   // that family's tray is full: wait for you to empty it
+      }
+      if (changed) refreshHopper(h);
+      if (h.light) h.light.material.color.set(h.busy > 0 ? (Math.sin(time * 20) > 0 ? 0x7ff07f : 0x2e9e4f) : h.queue.length ? 0xffc040 : 0x555555);
+    }
+  }
+  function refreshHopper(h) {
+    if (!h.trayMeshes) return;
+    h.trayMeshes.forEach((m, f) => {
+      const n = h.trays[f].length;
+      m.visible = n > 0;
+      m.scale.y = Math.max(0.01, n / TRAY_CAP);
+      m.position.y = m.userData.base + m.scale.y * 0.08;
+    });
+    if (h.funnelFill) { const q = Math.min(1, h.queue.length / 200); h.funnelFill.visible = q > 0; h.funnelFill.scale.setScalar(Math.max(0.05, q)); }
+  }
+  // Empty-handed, take a handful from the trays (the shade there's most of); with the tote, scoop them all
+  function takeFromHopper(h) {
+    const all = h.trays.flat();
+    if (!all.length) { toast(h.queue.length ? 'The hopper is still sorting. Its family trays fill as it goes.' : 'The hopper is empty. Toss mixed crayons in, or click it with the tote or vacuum.'); return; }
+    if (tote.on) {
+      const room = toteCap(lvl('tote')) - tote.items.length;
+      if (room <= 0) { toast('Your tote is full!'); return; }
+      let n = 0;
+      for (const tray of h.trays) while (tray.length && n < room) { tote.items.push(tray.pop()); n++; }
+      refreshTote(); refreshHopper(h);
+      blip(400, 0.08, 'sine', 0.05);
+      return;
+    }
+    const counts = {};
+    all.forEach(c => { counts[c] = (counts[c] || 0) + 1; });
+    const c = hand.n ? hand.c : +Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+    if (!counts[c]) { toast('No crayons of that shade in the trays.'); return; }
+    let n = Math.min(handSize(lvl('hand')) - hand.n, counts[c]);
+    if (n <= 0) { toast('Your hands are full!'); return; }
+    hand.c = c;
+    const tray = h.trays[SHADES[c].family];
+    for (let i = tray.length - 1; i >= 0 && n > 0; i--) if (tray[i] === c) { tray.splice(i, 1); hand.n++; n--; }
+    refreshHand(); refreshHopper(h);
+    blip(380, 0.07, 'sine', 0.05);
+  }
 
-  function updateBot(bot, dt) {
-    const speed = 1.6 + lvl('botSpeed') * 0.6;
-    bot.bob += dt * 8;
+  // Conveyor belts (K): click points on the floor; a belt that starts by a hopper
+  // carries crayons to the boxes and drawers near its far end
+  const BELT_Y = 0.32, BELT_SPEED = 2.2;
+  const beltGroup = new T.Group();
+  scene.add(beltGroup);
+  const beltTex = canvasTex(64, 64, (g, w, h) => {
+    g.fillStyle = '#3a3a40'; g.fillRect(0, 0, w, h);
+    g.fillStyle = '#55555d';
+    for (let i = 0; i < 4; i++) { g.beginPath(); g.moveTo(8, i * 16 + 12); g.lineTo(32, i * 16 + 2); g.lineTo(56, i * 16 + 12); g.lineTo(56, i * 16 + 16); g.lineTo(32, i * 16 + 6); g.lineTo(8, i * 16 + 16); g.fill(); }
+  });
+  beltTex.wrapS = beltTex.wrapT = T.RepeatWrapping;
+  const beltSideMat = std(0xffd23f, { roughness: 0.5 }), beltLegMat = std(0x888890, { roughness: 0.4, metalness: 0.3 });
+  const beltTexes = [];
+  const beltMode = { on: false, pts: null };
+  function rebuildBelts() {
+    beltGroup.clear();
+    beltTexes.length = 0;
+    const draw = (pts, ghost) => {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x1, z1] = pts[i], [x2, z2] = pts[i + 1];
+        const len = Math.hypot(x2 - x1, z2 - z1);
+        if (len < 0.01) continue;
+        const seg = new T.Group();
+        seg.position.set((x1 + x2) / 2, 0, (z1 + z2) / 2);
+        seg.rotation.y = Math.atan2(x2 - x1, z2 - z1);
+        const tex = beltTex.clone(); tex.needsUpdate = true; tex.repeat.set(1, len / 0.4); beltTexes.push(tex);
+        const top = mesh(new T.BoxGeometry(0.36, 0.05, len + 0.36), new T.MeshStandardMaterial({ map: tex, roughness: 0.8, transparent: ghost, opacity: ghost ? 0.6 : 1 }), 0, BELT_Y, 0);
+        seg.add(top);
+        for (const sx of [-0.2, 0.2]) seg.add(mesh(new T.BoxGeometry(0.04, 0.09, len + 0.36), beltSideMat, sx, BELT_Y + 0.02, 0));
+        for (let k = 0; k <= Math.floor(len / 1.2); k++) {
+          const z = -len / 2 + Math.min(len, k * 1.2);
+          for (const sx of [-0.16, 0.16]) seg.add(mesh(new T.BoxGeometry(0.04, BELT_Y, 0.04), beltLegMat, sx, BELT_Y / 2, z));
+        }
+        beltGroup.add(seg);
+      }
+    };
+    state.belts.forEach(b => draw(b.pts, false));
+    if (beltMode.pts && beltMode.pts.length > 1) draw(beltMode.pts, true);
+  }
+  function toggleBeltMode() {
+    if (!lvl('belts')) { toast('Conveyor belts unlock at 13,000 crayons sorted.'); return; }
+    if (beltMode.on) { finishBelt(); beltMode.on = false; toast('Belt tool put away.'); return; }
+    beltMode.on = true; beltMode.pts = null;
+    if (hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
+    toast('Belt tool: start next to a hopper, click to add bends, end by your boxes. Enter finishes a belt, Backspace undoes, K puts the tool away.');
+  }
+  function finishBelt() {
+    if (beltMode.pts && beltMode.pts.length > 1) {
+      state.belts.push({ pts: beltMode.pts });
+      const p0 = beltMode.pts[0];
+      if (!nearestHopper(p0[0], p0[1], 2.4)) toast('Tip: a belt needs to start within about 2 m of a sorter hopper to carry anything.');
+      save();
+    }
+    beltMode.pts = null;
+    rebuildBelts();
+  }
+  function beltClick() {
+    const fl = aim.floorHit;
+    if (!fl || fl.t > 30) return;
+    const x = clamp(Math.round(fl.point.x * 4) / 4, -HALF + 0.3, HALF - 0.3), z = clamp(Math.round(fl.point.z * 4) / 4, -HALF + 0.3, HALF - 0.3);
+    if (!beltMode.pts) beltMode.pts = [];
+    const last = beltMode.pts[beltMode.pts.length - 1];
+    if (last && Math.hypot(last[0] - x, last[1] - z) < 0.2) { finishBelt(); return; }
+    if (state.belts.reduce((n, b) => n + b.pts.length, 0) > 300) { toast('That is a lot of belt! Undo some first.'); return; }
+    beltMode.pts.push([x, z]);
+    rebuildBelts();
+    blip(300, 0.08, 'square', 0.03);
+  }
+  function undoBelt() {
+    if (beltMode.pts && beltMode.pts.length) beltMode.pts.pop();
+    else if (state.belts.length) { state.belts.pop(); save(); }
+    rebuildBelts();
+  }
+
+  // Crayon roombas: wander the floor, scoop a few crayons and bring them home
+  const bots = [];
+  function buildBot() {
+    const g = new T.Group();
+    if (!addModel(g, 'roomba')) {
+      g.add(mesh(new T.CylinderGeometry(0.24, 0.25, 0.09, 24), std(0xf4f6f8, { roughness: 0.35 }), 0, 0.06, 0));
+      g.add(mesh(new T.CylinderGeometry(0.08, 0.08, 0.02, 16), std(0x2d3a4a), 0, 0.115, 0.08));
+    }
+    const ring = mesh(new T.TorusGeometry(0.235, 0.012, 6, 32), std(0x3f8fe8, { emissive: 0x1d4f9a, emissiveIntensity: 0.6 }), 0, 0.06, 0, false);
+    ring.rotation.x = Math.PI / 2; g.add(ring);
+    const pile = new T.Group();
+    for (let i = 0; i < 6; i++) {
+      const m = new T.Mesh(crayonGeo, shadeMats[0]); m.scale.setScalar(0.8);
+      m.position.set((i % 3 - 1) * 0.06, 0.15 + Math.floor(i / 3) * 0.03, (Math.floor(i / 3) - 0.5) * 0.06);
+      m.rotation.y = i * 0.9; m.visible = false; pile.add(m);
+    }
+    g.add(pile);
+    scene.add(g);
+    return { g, pile, ring };
+  }
+  function syncBots() {
+    while (bots.length < lvl('bots')) {
+      const { g, pile, ring } = buildBot();
+      bots.push({ g, pile, ring, x: rand(-6, 6), z: rand(-6, 6), y: 0, state: 'idle', target: null, box: null, carry: [], wait: rand(0, 1), wob: Math.random() * 6, heading: 0 });
+    }
+  }
+  function boxWithSpace(c, x, z) {
+    let best = null, bd = Infinity;
+    for (const b of state.boxes) {
+      if (b.color !== c || b.count + b.incoming >= capOf(b)) continue;
+      if (placing && (placing.obj === b || placing.obj === b.parent)) continue;
+      const d = (b.x - x) ** 2 + (b.z - z) ** 2;
+      if (d < bd) { bd = d; best = b; }
+    }
+    return best;
+  }
+  const docks = () => state.decor.filter(d => d.type === 'dock' && !(placing && placing.obj === d));
+  // A dock's setting: 'any' color, one family ('f3'), or one exact shade ('s12')
+  const modeMatch = (mode, c) => !mode || mode === 'any' ? true : mode[0] === 'f' ? SHADES[c].family === +mode.slice(1) : c === +mode.slice(1);
+  const modeName = m => !m || m === 'any' ? 'any color' : m[0] === 'f' ? FAMILIES[+m.slice(1)].name : SHADES[+m.slice(1)].name;
+  function refreshBotPile(bot) {
+    bot.pile.children.forEach((m, i) => { m.visible = i < bot.carry.length; if (m.visible) m.material = shadeMats[bot.carry[i]]; });
+  }
+  function updateBot(bot, dt, idx) {
+    const speed = 1.4 + lvl('botSpeed') * 0.8;
+    bot.wob += dt * 3;
+    const ds = docks();
+    const home = ds.length ? ds[idx % ds.length] : null;
+    const mode = home ? home.mode || 'any' : 'any';
+    bot.ring.material.color.set(mode === 'any' ? 0x3f8fe8 : SHADES[mode[0] === 'f' ? +mode.slice(1) * 3 + 1 : +mode.slice(1)].hex);
+    const toHopper = mode === 'any' && hoppers().length > 0;
     const moveTo = (tx, tz) => {
       const dx = tx - bot.x, dz = tz - bot.z;
       const d = Math.hypot(dx, dz);
-      if (d < 0.12) return true;
+      if (d < 0.15) return true;
       const s = Math.min(d, speed * dt);
       bot.x += dx / d * s; bot.z += dz / d * s;
-      bot.g.rotation.y = Math.atan2(dx, dz);
+      const want = Math.atan2(dx, dz);
+      let diff = want - bot.heading; diff = Math.atan2(Math.sin(diff), Math.cos(diff));
+      bot.heading += diff * Math.min(1, dt * 8);
+      bot.g.rotation.y = bot.heading;
       return false;
     };
-    if (bot.wait > 0) bot.wait -= dt;
+    const cap = botCarry(lvl('botCarry'));
+    if (bot.wait > 0) { bot.wait -= dt; }
     else if (bot.state === 'idle') {
-      const ok = new Set();
-      state.boxes.forEach(b => { if (b.count + b.incoming < capOf(b)) ok.add(b.color); });
-      let best = null, bd = Infinity;
-      if (ok.size) for (const c of cr) {
-        if (c.claimed || c.delay > 0 || !ok.has(c.c)) continue;
-        const d = (c.x - bot.x) ** 2 + (c.z - bot.z) ** 2;
-        if (d < bd) { bd = d; best = c; }
+      // which shades could this roomba deliver right now?
+      let ok;
+      if (toHopper) ok = null;   // the hopper takes anything
+      else {
+        ok = new Set();
+        state.boxes.forEach(b => { if (b.count + b.incoming < capOf(b) && modeMatch(mode, b.color)) ok.add(b.color); });
       }
-      if (!best) bot.wait = 1.5;
-      else { best.claimed = true; bot.target = best; bot.state = 'toCrayon'; }
+      let best = null, bd = Infinity;
+      if (!ok || ok.size) for (let i = 0; i < cr.length; i += 1) {
+        const c = cr[i];
+        if (c.claimed || c.delay > 0 || (ok && !ok.has(c.c)) || (toHopper && !modeMatch(mode, c.c))) continue;
+        const d = (c.x - bot.x) ** 2 + (c.z - bot.z) ** 2;
+        if (d < bd) { bd = d; best = c; if (d < 1) break; }
+      }
+      if (!best) {
+        bot.wait = 1.5;
+        if (home && Math.hypot(home.x - bot.x, home.z - bot.z) > 0.4) bot.state = 'park';
+      } else { best.claimed = true; bot.target = best; bot.state = 'toCrayon'; }
+    } else if (bot.state === 'park') {
+      if (!home || moveTo(home.x, home.z)) { bot.state = 'idle'; bot.wait = 2; }
     } else if (bot.state === 'toCrayon') {
       const t = bot.target;
       if (!t || t.dead) { bot.state = 'idle'; bot.target = null; }
       else if (moveTo(t.x, t.z)) {
-        const box = boxWithSpace(t.c, t.x, t.z);
-        if (!box) { t.claimed = false; bot.state = 'idle'; }
-        else {
-          const want = Math.min(botCarry(lvl('botSpeed')), capOf(box) - box.count - box.incoming);
-          const grab = [t];
-          forNear(t.x, t.z, 0.5, o => {
-            if (grab.length < want && o !== t && o.c === t.c && !o.claimed && o.delay <= 0) grab.push(o);
-          });
-          grab.sort((a, b) => b.y - a.y).forEach(removeCrayon);
-          bot.carry = grab.map(o => o.c);
-          bot.box = box;
-          box.incoming += grab.length;
-          bot.target = null;
-          bot.state = 'toBox';
-          bot.wait = 0.3;
-          bot.carryMesh.material = shadeMats[t.c];
-          bot.carryMesh.visible = true;
-        }
+        const grab = [t];
+        const fits = o => toHopper ? modeMatch(mode, o.c) : mode === 'any' ? o.c === t.c : modeMatch(mode, o.c) && boxWithSpace(o.c, o.x, o.z);
+        forNear(t.x, t.z, 0.6, o => { if (grab.length < cap && o !== t && !o.claimed && !o.dead && o.delay <= 0 && fits(o)) grab.push(o); });
+        grab.sort((a, b) => b.y - a.y).forEach(removeCrayon);
+        bot.carry = grab.map(o => o.c);
+        bot.target = null; bot.wait = 0.3;
+        bot.state = toHopper ? 'toHopper' : 'toBox';
+        refreshBotPile(bot);
+      }
+    } else if (bot.state === 'toHopper') {
+      // unload at the dock if it sits by a hopper, otherwise drive to the nearest hopper
+      const hp = home ? nearestHopper(home.x, home.z, 3) : null;
+      const h = hp || nearestHopper(bot.x, bot.z);
+      if (!h) { bot.state = 'toBox'; return; }
+      const goal = hp ? home : h;
+      const [gx, gz] = hp ? [home.x, home.z] : [h.x + (bot.x > h.x ? 0.9 : -0.9), h.z + 0.6];
+      if (moveTo(gx, gz)) {
+        if (h.queue && h.queue.length >= 300) { bot.wait = 2; return; }   // the hopper is backed up: wait your turn
+        feedHopper(h, bot.carry, new T.Vector3(bot.x, 0.3, bot.z));
+        bot.carry = []; refreshBotPile(bot);
+        bot.state = 'idle'; bot.wait = goal === home ? 0.6 : 0.3;
       }
     } else if (bot.state === 'toBox') {
-      const box = bot.box;
-      if (!state.boxes.includes(box)) {
-        bot.carry.forEach(c => addCrayon(bot.x, bot.z, c));
-        bot.carry = []; bot.state = 'idle'; bot.carryMesh.visible = false;
-      } else {
-        const [, hd] = boxHalf(box);
-        if (moveTo(box.x, box.z + (bot.z > box.z ? hd + 0.4 : -hd - 0.4))) {
-          box.incoming = Math.max(0, box.incoming - bot.carry.length);
-          for (const c of bot.carry) {
-            if (box.color === c && box.count < capOf(box)) {
-              box.count++;
-              recordSort(c, false);
-            } else addCrayon(bot.x, bot.z, c);
-          }
-          refreshBox(box);
-          if (isDrawer(box)) bumpDrawer(box);
-          if (box.count >= capOf(box) && lvl('autoPack')) setTimeout(() => packBox(box), 400);
-          bot.carry = []; bot.box = null; bot.state = 'idle'; bot.wait = 0.3;
-          bot.carryMesh.visible = false;
+      if (!bot.carry.length) { bot.state = 'idle'; return; }
+      const box = bot.box && state.boxes.includes(bot.box) && bot.box.color === bot.carry[0] && bot.box.count < capOf(bot.box) ? bot.box : boxWithSpace(bot.carry[0], bot.x, bot.z);
+      bot.box = box;
+      if (!box) {
+        const c = bot.carry.shift(); addCrayon(bot.x, bot.z, c); refreshBotPile(bot);
+        return;
+      }
+      const [, hd] = boxHalf(box);
+      if (moveTo(box.x, box.z + (bot.z > box.z ? hd + 0.4 : -hd - 0.4))) {
+        const keep = [];
+        for (const c of bot.carry) {
+          if (box.color === c && box.count < capOf(box)) { box.count++; recordSort(c, false); }
+          else keep.push(c);
         }
+        refreshBox(box);
+        if (isDrawer(box)) bumpDrawer(box);
+        if (isBin(box)) checkSet(box);
+        if (box.count >= capOf(box) && lvl('autoPack')) setTimeout(() => packBox(box), 400);
+        bot.carry = keep; bot.box = null; bot.wait = 0.3;
+        refreshBotPile(bot);
+        if (!keep.length) bot.state = 'idle';
       }
     }
     const ground = topAt(bot.x, bot.z, 0.25);
     bot.y += (ground - bot.y) * Math.min(1, dt * 8);
-    bot.g.position.set(bot.x, bot.y + Math.abs(Math.sin(bot.bob)) * 0.03, bot.z);
+    bot.g.position.set(bot.x, bot.y, bot.z);
+    bot.g.rotation.z = Math.sin(bot.wob) * 0.02;
   }
 
   // ---------------------------------------------------------------------------
@@ -2779,6 +3282,11 @@
       const what = carry ? (lifted ? 'click to put it back' : here != null ? `click to swap with ${SHADES[here].name}` : 'click to put it here')
         : here != null ? `${sw(SHADES[here].hex)}${SHADES[here].name} · click to pick up` : 'empty spot';
       html = `<b>Shelf</b> ${shelfUsed(sh)}/${SHELF_CAP} <span class="dim">· ${what}${carry ? '' : ' · C tidy by color · G move'}</span>`;
+    } else if (aim.type === 'decor' && aim.obj.type === 'hopper') {
+      const h = aim.obj, inTrays = (h.trays || []).reduce((n, t) => n + t.length, 0);
+      html = `🎰 <b>Sorter Hopper</b> ${(h.queue || []).length} waiting · ${inTrays} in trays <span class="dim">· ${hand.n ? 'click to toss in' : tote.on && tote.items.length ? 'click to dump the tote' : inTrays ? 'click to take from the trays' : 'toss mixed crayons in'} · G move</span>`;
+    } else if (aim.type === 'decor' && aim.obj.type === 'dock') {
+      html = `🔌 <b>Roomba Dock</b> <span class="dim">· collects ${modeName(aim.obj.mode)} · C change · G move</span>`;
     } else if (aim.type === 'decor') {
       html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
     } else if (aim.type === 'floor') {
@@ -2798,7 +3306,11 @@
     crosshair.classList.toggle('free', !locked);
     crosshair.classList.toggle('on', aim.type === 'crayon' || aim.type === 'box');
     let hh = '';
-    if (tapeMode.on) {
+    if (beltMode.on) {
+      hh = `➰ Belt tool <span class="dim">· ${beltMode.pts && beltMode.pts.length ? 'click to add a bend · Enter (or click the last point) to finish' : 'click the floor next to a hopper to start'} · Backspace undo · K done</span>`;
+    } else if (vac.on) {
+      hh = `🌀 Vacuum <b>${tote.items.length} / ${VAC_CAP}</b> <span class="dim">· ${modeName(vac.filter)} · hold the mouse to suck · R target what you look at · click the hopper or boxes to empty · H put away</span>`;
+    } else if (tapeMode.on) {
       hh = `<span class="sw" style="background:${TAPE_COLORS[tapeMode.color]}"></span>Floor tape <span class="dim">· ${tapeMode.start ? 'click to end the lane' : 'click the floor to start a lane'} · R color · Backspace undo · N done</span>`;
     } else if (planner.on) {
       hh = '📐 Planner view <span class="dim">· WASD pan · scroll zoom · click something to move it · P back</span>';
@@ -2850,6 +3362,15 @@
     updateAim();
     if (placing) { finishPlacing(); return; }
     if (tapeMode.on) { tapeClick(); return; }
+    if (beltMode.on) { beltClick(); return; }
+    if (vac.on) { vacClick(); return; }
+    const hop = aim.type === 'decor' && aim.obj.type === 'hopper' ? aim.obj : null;
+    if (hop && !planner.on && !carry) {
+      if (tote.on && tote.items.length) { feedHopper(hop, tote.items.splice(0), camera.position.clone().add(new T.Vector3(0, -0.4, 0))); refreshTote(); }
+      else if (hand.n) { handGroup.getWorldPosition(handWorld); feedHopper(hop, new Array(hand.n).fill(hand.c), handWorld); hand.n = 0; hand.c = -1; refreshHand(); }
+      else takeFromHopper(hop);
+      return;
+    }
     if (planner.on) {
       if (aim.type === 'box' && isBin(aim.obj)) startPlacing('decor', aim.obj.parent, false);
       else if (aim.type === 'box') startPlacing('box', aim.obj, false);
@@ -2937,6 +3458,8 @@
       if (anyModal()) { closeModals(); return; }
       if (placing) cancelPlacing();
       else if (tapeMode.on) toggleTapeMode();
+      else if (beltMode.on) toggleBeltMode();
+      else if (vac.on) toggleVac();
       else if (planner.on) togglePlanner();
       return;
     }
@@ -2947,6 +3470,11 @@
     else if (e.code === 'KeyL') { if (!locked) requestLock(); }
     else if (e.code === 'KeyB' && !planner.on) toggleTote();
     else if (e.code === 'KeyN' && !planner.on) toggleTapeMode();
+    else if (e.code === 'KeyK' && !planner.on) toggleBeltMode();
+    else if (e.code === 'KeyH' && !planner.on) toggleVac();
+    else if (e.code === 'Enter' && beltMode.on) finishBelt();
+    else if (e.code === 'Backspace' && beltMode.on) { e.preventDefault(); undoBelt(); }
+    else if (e.code === 'KeyR' && vac.on && !placing) cycleVacFilter();
     else if (e.code === 'KeyP' && !placing) togglePlanner();
     else if (e.code === 'Backspace' && tapeMode.on) { e.preventDefault(); if (state.tape.pop()) { rebuildTape(); save(); } tapeMode.start = null; }
     else if (e.code === 'KeyR' && tapeMode.on && !placing) { tapeMode.color = (tapeMode.color + 1) % TAPE_COLORS.length; toast('Tape color changed.'); }
@@ -2978,6 +3506,7 @@
     } else if (e.code === 'KeyC' && !placing) {
       updateAim();
       if (aim.type === 'decor' && aim.obj.type === 'shelf' && !carry) tidyShelf(aim.obj);
+      else if (aim.type === 'decor' && aim.obj.type === 'dock') openDockPicker(aim.obj);
       else if ((aim.type === 'box' && isBin(aim.obj) && aim.obj.parent.type === 'cart') || (aim.type === 'decor' && aim.obj.type === 'cart')) {
         const cart = aim.obj.parent || aim.obj;
         if (cart.bins.some(b => b.count)) toast('Empty the cart to change its color family.');
@@ -3118,6 +3647,19 @@
         el.appendChild(btn);
         list.appendChild(el);
       });
+    } else if (shopTab === 'achievements') {
+      const got = ACHIEVEMENTS.filter(a => state.ach && state.ach[a.id]).length;
+      const head = document.createElement('div');
+      head.className = 'tab-intro';
+      head.innerHTML = `<div class="limit"><b>🏆 ${got} / ${ACHIEVEMENTS.length}</b> achievements</div>`;
+      list.appendChild(head);
+      const grid = document.createElement('div');
+      grid.className = 'ups achs';
+      grid.innerHTML = ACHIEVEMENTS.map(a => {
+        const ok = state.ach && state.ach[a.id];
+        return `<div class="up${ok ? ' got' : ' off'}">${ok ? a.icon : '🔒'} <b>${a.name}</b><small>${a.desc}${ok ? ' · done' : ''}</small></div>`;
+      }).join('');
+      list.appendChild(grid);
     } else {
       // Collection: progress per color family and what it unlocks
       const ups = document.createElement('div');
@@ -3133,7 +3675,7 @@
       lad.innerHTML = `<h4>Sorting milestones <span class="lvl">${state.bestTotal.toLocaleString()} sorted at best</span></h4><ol>` + LADDER.map(r => {
         const got = !r.soon && state.bestTotal >= r.at;
         const cls = r.soon ? 'soon' : got ? 'got' : r === nxt ? 'next' : '';
-        return `<li class="${cls}"><span class="tier">${r.at.toLocaleString()}</span>${rewardIcon(r)} ${rewardName(r)}${got ? ' ✓' : r.soon ? ' <small>coming in a later update</small>' : r === nxt ? ` <small>${(r.at - state.bestTotal).toLocaleString()} to go</small>` : ''}</li>`;
+        return `<li class="${cls}"><span class="tier">${r.at.toLocaleString()}</span>${rewardIcon(r)} ${rewardName(r)}${got ? ' ✓' : r.soon ? ' <small>coming in a later update</small>' : r.goal ? ' <small>the finale</small>' : r === nxt ? ` <small>${(r.at - state.bestTotal).toLocaleString()} to go</small>` : ''}</li>`;
       }).join('') + '</ol>';
       list.appendChild(lad);
       const pg = document.createElement('div');
@@ -3676,10 +4218,11 @@
       flights.forEach(f => loose.push(f.c));
       tote.items.forEach(c => loose.push(c));
       bots.forEach(b => b.carry.forEach(c => loose.push(c)));
+      travellers.forEach(t => loose.push(t.c));
       const s = {
-        sorted: state.sorted, familySorted: state.familySorted, familyBest: state.familyBest, shadeSorted: state.shadeSorted, bestTotal: state.bestTotal, done: state.done, furnished: state.furnished || 0, tape: state.tape,
+        sorted: state.sorted, familySorted: state.familySorted, familyBest: state.familyBest, shadeSorted: state.shadeSorted, bestTotal: state.bestTotal, done: state.done, furnished: state.furnished || 0, tape: state.tape, belts: state.belts, shadeTotal: state.shadeTotal, ach: state.ach,
         boxes: state.boxes.filter(b => !isBin(b)).map(({ x, z, rot, color, count, packed, kind, level }) => ({ x, z, rot, color, count, packed, kind, level })),
-        decor: state.decor.map(({ type, x, y, z, ry, packed, bins, fam, sets }) => ({ type, x, y, z, ry, packed, fam, sets, counts: bins ? bins.map(b => b.count) : undefined })),
+        decor: state.decor.map(({ type, x, y, z, ry, packed, bins, fam, sets, queue, trays, mode }) => ({ type, x, y, z, ry, packed, fam, sets, queue, trays, mode, counts: bins ? bins.map(b => b.count) : undefined })),
         player: { x: player.x, z: player.z, yaw: player.yaw, pitch: player.pitch },
         crayons: flat, loose,
       };
@@ -3689,6 +4232,8 @@
 
   function clearWorld() {
     tapeGroup.clear();
+    beltGroup.clear();
+    travellers.forEach(t => scene.remove(t.m)); travellers.length = 0;
     if (state) {
       state.boxes.forEach(b => scene.remove(b.group));
       state.decor.forEach(d => scene.remove(d.group));
@@ -3731,17 +4276,20 @@
     ['tallplant', 11.2, 11.2, 0],
     // toys (added in furnishing version 2)
     ['blocks', -6.9, 9.3, 0.4, 2], ['duck', -11.3, -5.2, 0.8, 2], ['teddy', 8.6, 9.6, -2.2, 2],
+    // the rainbow wall (version 3)
+    ['rainbow', HALF - 0.03, 3.6, -Math.PI / 2, 3],
   ];
-  const FURNISH_V = 2;
+  const FURNISH_V = 3;
   function furnish(existing = false, from = 0) {
     for (const [type, x, z, ry, v = 1] of FURNISHINGS) {
       if (v <= from) continue;
       // in an older save, skip any spot you've already used for something else
-      if (existing && !DECOR[type].under && (blockedAt(x, z, DECOR[type].r) || state.boxes.some(b => Math.hypot(b.x - x, b.z - z) < DECOR[type].r + 0.7))) continue;
-      const d = { type, x, y: 0, z, ry, packed: [] };
+      if (existing && DECOR[type].wall && state.decor.some(o => o.type === type)) continue;
+      if (existing && !DECOR[type].under && !DECOR[type].wall && (blockedAt(x, z, DECOR[type].r) || state.boxes.some(b => Math.hypot(b.x - x, b.z - z) < DECOR[type].r + 0.7))) continue;
+      const d = { type, x, y: DECOR[type].wall ? 3.3 : 0, z, ry, packed: [] };
       state.decor.push(d);
       buildDecor(d);
-      if (existing && !DECOR[type].under) clearUnder(x, z, DECOR[type].r + 0.15);
+      if (existing && !DECOR[type].under && !DECOR[type].wall) clearUnder(x, z, DECOR[type].r + 0.15);
     }
     state.furnished = FURNISH_V;
   }
@@ -3799,7 +4347,7 @@
         // older saves didn't track shades: count what's already in boxes
         state.boxes.forEach(b => { state.shadeSorted[b.color] = Math.max(state.shadeSorted[b.color], b.count + (b.packed || 0) * capacity()); });
         (s.decor || []).forEach(d => {
-          const o = { type: d.type, x: d.x, y: d.y || 0, z: d.z, ry: d.ry || 0, packed: d.packed || [], counts: d.counts, fam: d.fam, sets: d.sets };
+          const o = { type: d.type, x: d.x, y: d.y || 0, z: d.z, ry: d.ry || 0, packed: d.packed || [], counts: d.counts, fam: d.fam, sets: d.sets, queue: d.queue, trays: d.trays, mode: d.mode };
           state.decor.push(o);
           buildDecor(o);
         });
@@ -3816,6 +4364,10 @@
         state.furnished = fv;
         state.tape = Array.isArray(s.tape) ? s.tape.filter(t => t && isFinite(t.x1)) : [];
         rebuildTape();
+        state.belts = Array.isArray(s.belts) ? s.belts.filter(b => b && Array.isArray(b.pts)) : [];
+        rebuildBelts();
+        state.ach = s.ach || {};
+        state.shadeTotal = Array.isArray(s.shadeTotal) ? s.shadeTotal : null;
         if (fv < FURNISH_V) {
           // rooms saved before new furniture arrived get it now (minus spots you already used)
           furnish(true, fv);
@@ -3866,7 +4418,13 @@
     updateAnimating(dt);
     updateFlights(dt);
     syncBots();
-    bots.forEach(b => updateBot(b, dt));
+    bots.forEach((b, i) => updateBot(b, dt, i));
+    updateHoppers(dt);
+    updateTravellers(dt);
+    beltTexes.forEach(t => { t.offset.y = (t.offset.y - dt * BELT_SPEED / 0.4) % 1; });
+    updateVac(dt);
+    updateRainbow(dt);
+    updateAchievements(dt);
     updateGlow(time);
     state.decor.forEach(d => d.update && d.update(time));
     updateDrawers(dt);
@@ -3925,7 +4483,7 @@
   window.craySorting = {
     get state() { return state; }, get crayons() { return cr; }, get aim() { return aim; },
     player, SHADES, save, act, pickUp, tossToBox, takeFromBox, refreshBox, hand, camera, coloring, get marks() { return marks; },
-    tote, toggleTote, scoopTote, toggleTapeMode, togglePlanner, planner, tapeMode, tapeClick, storageUsed, startPlacing, finishPlacing, addBox, buildDecor, get placing() { return placing; }, openShop, celebrate, liftPacked, placeCarry, tidyShelf, get carry() { return carry; }, shelfSlotAt, packBox, lvl, boxLimit,
+    tote, toggleTote, scoopTote, vac, toggleVac, feedHopper, toggleBeltMode, beltClick, finishBelt, get bots() { return bots; }, shadeDone, ACHIEVEMENTS, toggleTapeMode, togglePlanner, planner, tapeMode, tapeClick, storageUsed, startPlacing, finishPlacing, addBox, buildDecor, get placing() { return placing; }, openShop, celebrate, liftPacked, placeCarry, tidyShelf, get carry() { return carry; }, shelfSlotAt, packBox, lvl, boxLimit,
     setBest(n) { state.bestTotal = n; recomputeUnlocks(); applyLabels(); syncBots(); state.boxes.forEach(refreshBox); },
   };
 })();
