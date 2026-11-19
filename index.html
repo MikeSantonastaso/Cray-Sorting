@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cray Sorting</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Patrick+Hand&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <canvas id="game"></canvas>
+
+  <div id="hud">
+    <div class="stats">
+      <span class="brand" aria-label="Cray Sorting"><i>C</i><i>r</i><i>a</i><i>y</i> <i>S</i><i>o</i><i>r</i><i>t</i><i>i</i><i>n</i><i>g</i></span>
+      <div class="progress pill" title="Your progress through the whole room">
+        <div class="ptop"><span id="progressText">0 / 60,000 sorted</span><b id="progressPct">0%</b></div>
+        <div class="pbar"><div id="progressFill"></div></div>
+      </div>
+      <span id="floorCount" class="pill">60,000 still on the floor</span>
+      <span id="nextReward" class="pill"></span>
+    </div>
+    <div class="buttons">
+      <button id="btnShop" class="primary c-red" title="Boxes and furniture (E)">🧰 Build <kbd>E</kbd></button>
+      <button id="btnCollection" class="c-yellow" title="Your unlocks (F)">🏅 Collection <kbd>F</kbd></button>
+      <button id="btnLock" class="c-blue" title="Lock the mouse for first-person look (L)">🎯 Mouse look</button>
+      <button id="btnSound" class="c-green icon" title="Sound on/off">🔊</button>
+      <button id="btnHelp" class="c-purple icon" title="How to play">?</button>
+    </div>
+  </div>
+
+  <div id="crosshair"></div>
+  <div id="finder" hidden></div>
+  <div id="aimLabel" hidden></div>
+  <div id="handLabel" hidden></div>
+  <div id="hint"></div>
+  <div id="floaters"></div>
+  <div id="toast"></div>
+  <div id="joystick" hidden><div class="knob"></div></div>
+  <div id="unlock" hidden><b></b><span></span></div>
+  <div id="loading">
+    <div class="load-logo"><i>C</i><i>r</i><i>a</i><i>y</i> <i>S</i><i>o</i><i>r</i><i>t</i><i>i</i><i>n</i><i>g</i></div>
+    <div class="load-crayons"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <p>Dumping 60,000 crayons on the floor…</p>
+  </div>
+
+  <div id="shop" class="modal" hidden>
+    <div class="card wide">
+      <div class="card-head flap-red">
+        <h2>🧰 Build</h2>
+        <button class="close" data-close="shop">✕</button>
+      </div>
+      <nav class="tabs">
+        <button data-tab="boxes" class="active t-orange">📦 Boxes &amp; drawers</button>
+        <button data-tab="furniture" class="t-green">🪴 Furniture</button>
+        <button data-tab="collection" class="t-blue">🏅 Collection</button>
+        <button data-tab="achievements" class="t-yellow">🏆 Achievements</button>
+      </nav>
+      <div id="shopList" class="shop-list"></div>
+    </div>
+  </div>
+
+  <div id="picker" class="modal" hidden>
+    <div class="card">
+      <div class="card-head flap-blue">
+        <h2 id="pickerTitle" class="small">Pick a shade for this box</h2>
+        <button class="close" data-close="picker">✕</button>
+      </div>
+      <div id="pickerList" class="picker-list"></div>
+    </div>
+  </div>
+
+  <div id="coloring" class="modal" hidden>
+    <div class="card wide">
+      <div class="card-head flap-green">
+        <h2>🖍️ Coloring page</h2>
+        <button class="close" data-close="coloring">✕</button>
+      </div>
+      <div class="coloring-body">
+        <div class="color-title"><b id="colorTitle"></b><span id="colorFound"></span></div>
+        <canvas id="colorCanvas" width="640" height="480"></canvas>
+        <div id="colorTools" class="color-tools">
+          <span class="current">Coloring with <b id="colorCurrent"></b></span>
+          <button data-size="8">Thin</button>
+          <button data-size="14">Medium</button>
+          <button data-size="26">Thick</button>
+          <button id="colorEraser">🩹 Eraser</button>
+          <button id="colorClear">🧽 Clear page</button>
+        </div>
+        <p id="colorNote" class="tab-intro"></p>
+      </div>
+    </div>
+  </div>
+
+  <div id="help" class="modal" hidden>
+    <div class="card notebook">
+      <div class="card-head flap-purple">
+        <h2>How to play</h2>
+        <button class="close" data-close="help">✕</button>
+      </div>
+      <div class="help-body">
+        <p>This room is buried under <b>60,000 completely mixed-up crayons</b>: 30 shades across 10 colors, covering every inch of the floor. Nobody sorted anything. Your job is to sort every last one.</p>
+        <div class="keys">
+          <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>Shift</kbd> run</div>
+          <div><b>Mouse</b> look around (click 🎯 Mouse look, or drag)</div>
+          <div><b>Click</b> a crayon to pick it up · <b>click</b> a box to toss it in</div>
+          <div><b>Click</b> a box with empty hands (or <kbd>T</kbd>) to take crayons back out</div>
+          <div><b>Click</b> the floor to drop crayons · <kbd>Q</kbd> drop at your feet</div>
+          <div><b>Click</b> a full box to pack it onto the nearest shelf · drawers stack, so build towers</div>
+          <div><b>Click</b> a packed box on a shelf to carry it to any shelf spot · <kbd>C</kbd> on a shelf tidies it by color</div>
+          <div><kbd>J</kbd> broom: hold the mouse and walk to push crayons ahead of you, to clear a spot or pull them out of a corner</div>
+          <div><kbd>B</kbd> tote bucket (once unlocked): scoop any color. Click a box to hand it a handful of its shade, or tip the whole tote into a hopper</div>
+          <div><kbd>E</kbd> build (free boxes for any shade, shelves, furniture) · <kbd>F</kbd> collection</div>
+          <div>Hold a crayon and <b>click</b> a page on the coloring table (or <kbd>V</kbd>) to color it · hold <kbd>V</kbd> to scribble on anything</div>
+          <div><kbd>G</kbd> move what you're looking at (hold <kbd>Alt</kbd> to place off the grid) · <kbd>R</kbd> rotate · <kbd>X</kbd> put away · <kbd>C</kbd> change an empty box's shade</div>
+          <div>Later unlocks: <kbd>N</kbd> floor tape · <kbd>P</kbd> room planner · <kbd>K</kbd> lay a conveyor belt (<kbd>Enter</kbd> finishes) · <kbd>H</kbd> vacuum (<kbd>R</kbd> picks what it sucks up)</div>
+          <div>Drop crayons in a <b>hopper</b> and it sorts them into trays, onto belts or into nearby boxes · <kbd>C</kbd> on a roomba dock picks what its roombas collect</div>
+        </div>
+        <p>Each crayon only counts in the box or drawer for its <b>exact</b> shade. Look at one to see its name. Boxes, stackable drawers and shelves cost nothing, but space is limited: sorting earns Storage Permits that let you place more, and you can only build on floor you've cleared, so sweep a spot and plan where each shade lives. Totes, the wagon and the vacuum only collect: hand a box its shade by clicking it, or tip everything into a hopper and let your machines sort. Sorting enough of a color unlocks upgrades and furniture: open the Collection to see what's next. Progress saves in this browser.</p>
+        <p class="credit">Crayon wrapper art adapted from <a href="https://sketchfab.com/3d-models/crayons-w-box-5b3ce4c8e5e545cba43f394af1b2d711" target="_blank" rel="noopener">"crayons w/ box"</a> by Fine_poultry. 3D models: <a href="https://sketchfab.com/3d-models/lil-bear-55ee397cf40c4f86af1ee31fb2096d82" target="_blank" rel="noopener">"Lil' Bear"</a> and <a href="https://sketchfab.com/3d-models/wooden-alphabet-blocks-5f8dfddbbc7d468784ca014378f7e5fe" target="_blank" rel="noopener">"Wooden Alphabet Blocks"</a> by Cherryvania, <a href="https://sketchfab.com/3d-models/quick-little-toy-rocket-58a99811d3a6477885be82d00da5ae40" target="_blank" rel="noopener">"Quick little toy rocket"</a> by naam, <a href="https://sketchfab.com/3d-models/cartoony-rubber-ducky-8a6e661916b74f9caa1c20dd6fdf77ad" target="_blank" rel="noopener">"Cartoony Rubber Ducky"</a> by Xabier Garcia, <a href="https://sketchfab.com/3d-models/optimized-potted-plants-967b4bf23fac4098993776fcfc2d3318" target="_blank" rel="noopener">"Optimized Potted Plants"</a> by Nicholas-3D, <a href="https://sketchfab.com/3d-models/robot-vacuum-cleaner-low-poly-7230d8d80e8b4a82b4a34a5e7926d0d3" target="_blank" rel="noopener">"Robot vacuum cleaner low poly"</a> by Moryak. All <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>, textures resized for the game.</p>
+        <div class="help-actions">
+          <button id="btnStart" class="primary big c-red">Start sorting</button>
+          <button id="btnReset" class="danger">Reset all progress</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="vendor/three.min.js"></script>
+  <script src="vendor/GLTFLoader.js"></script>
+  <script src="models.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>
