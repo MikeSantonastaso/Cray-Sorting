@@ -30,20 +30,22 @@ Three.js (r128) is vendored in `vendor/`, so it works offline. Progress saves au
 | Scribble on walls and furniture | Hold `V` while holding a crayon |
 | Take a hidden coloring page | Click it |
 | Broom | `J` to switch; hold the mouse and walk to push crayons ahead of you |
-| Tote bucket (after 1,500 sorted) | `B` to switch; click crayons to scoop any color, walk past boxes to drop each shade off, `Q` dumps it |
+| Tote bucket (after 1,500 sorted) | `B` to switch; click crayons to scoop any color. Click a box to hand it a handful of its shade, click a hopper to tip it all in, `Q` dumps it |
 | Carry a packed box to another shelf spot | Click it on the shelf, click the spot (swaps if taken). `Q` cancels, `C` on a shelf tidies it by color |
 | Place off the grid | Hold `Alt` while placing. Things you push against a wall sit flush with it |
 | Floor tape (after 2,500) | `N`, click points, `R` changes color, `Backspace` undoes, `Esc` exits |
 | Room planner (after 2,500) | `P` for the overhead view: `W` `A` `S` `D` pans, wheel zooms, click something to move it |
-| Conveyor belt (after 13,000) | `K`, click points, `Enter` or click the last point to finish, `Backspace` undoes |
+| Conveyor belt (after 5,000) | `K`, click points, `Enter` or click the last point to finish, `Backspace` undoes |
 | Feed a hopper | Click it with crayons in hand, or walk up with the tote. Click it empty-handed to take a tray |
 | Roomba dock settings | Look at the dock and press `C` to pick any color, one family, or one shade |
-| Vacuum (after 25,000) | `H` to switch, hold click to suck up crayons, `R` sets the filter, walk past boxes to drop off |
+| Vacuum (after 20,000) | `H` to switch, hold click to suck up crayons, `R` sets the filter, click a hopper to empty the bag (a shade vacuum empties straight into its box) |
 
 On phones and tablets there's an on-screen joystick for walking; drag to look and tap to act.
 
 ## Organizing and unlocks
 
+- **Collect, then sort.** Your hands sort one shade at a time. The tote, wagon and vacuum only collect mixed crayons: click a box to hand it a handful of its shade, or tip the lot into a sorter hopper. Hoppers (3,000), conveyor belts (5,000) and Crayon Roombas (10,000) are the fast way to sort, so how you lay them out is the game.
+- **Build on floor you've cleared.** Nothing can be placed on top of a crayon pile. The broom (`J`) pushes crayons aside, so the room opens up for building as you sort.
 - **Boxes are free, but space is limited.** Make a box for any shade and place it anywhere, but you start with room for 10 boxes and drawers and 2 shelf units. Storage Permits on the ladder raise those limits (60, 250, 450, 1,200 and on up to unlimited at 22,000), so plan where each shade lives. Crayons you sort stand up in the box, tips out, and you can take them back out any time.
 - **Organize your shelves.** A full box packs onto the nearest shelf unit with room. Click a packed box to carry it to any spot on any shelf (it swaps if the spot is taken), or press `C` on a shelf to tidy it by color.
 - **Sorting drawers stack.** Each one holds three boxes' worth and never needs packing. While placing a drawer, look at another drawer to stack it on top, up to 8 high.

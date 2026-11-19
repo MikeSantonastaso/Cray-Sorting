@@ -90,10 +90,10 @@
     colorVac: { name: 'Color Vacuum and Color Roomba', icon: '🎯', info: () => 'R with the vacuum targets one color family; set docks to a family too' },
     shadeVac: { name: 'Shade Vacuum and Shade Roomba', icon: '🔍', info: () => 'Target one exact shade with the vacuum or a dock, and it goes straight into that shade\'s box' },
     labels:   { name: 'Label Maker',     icon: '🏷️', info: () => 'Box signs show from across the room, and drawers get name labels' },
-    tote:     { name: 'Tote Bucket',     icon: '🪣', info: l => `Press B for the tote: scoop ${toteCap(l)} crayons of any color, and boxes you walk past take their own shade` },
+    tote:     { name: 'Tote Bucket',     icon: '🪣', info: l => `Press B for the tote: scoop ${toteCap(l)} crayons of any color. Click a box to hand it a handful of its shade, or tip it all into a hopper` },
     jars:     { name: 'Crayon Jars',     icon: '🫙', info: () => 'See-through jars that hold twice a box and show how full they are (E → Boxes)' },
     tape:     { name: 'Floor Tape and Planner', icon: '📐', info: () => 'N lays colored tape lanes on the floor, P opens a top-down planner view' },
-    wagon:    { name: 'Wagon',           icon: '🛻', info: () => 'Your tote becomes a wagon: 120 mixed crayons, and boxes within 2.5 m take their shade' },
+    wagon:    { name: 'Wagon',           icon: '🛻', info: () => 'Your tote becomes a wagon: 120 mixed crayons, and it tips everything into any hopper you pass' },
     finder:   { name: 'Finder Arrow',    icon: '🧭', info: () => 'An arrow points to the nearest box with room for what you carry' },
   };
 
@@ -133,22 +133,24 @@
     { at: 7000, up: 'storage' },
     { at: 7500, up: 'tote' },
     { at: 9000, up: 'hand' },
-    { at: 9000, decor: 'hopper' },
+    { at: 3000, decor: 'hopper' },
     { at: 12000, up: 'bigBox' },
-    { at: 13000, up: 'belts' },
-    { at: 18000, up: 'bots' },
-    { at: 18000, decor: 'dock' },
-    { at: 20000, up: 'botCarry' },
-    { at: 22000, up: 'bots' },
-    { at: 24000, up: 'botSpeed' },
-    { at: 25000, up: 'vacuum' },
-    { at: 27000, up: 'bots' },
-    { at: 30000, up: 'botCarry' },
-    { at: 33000, up: 'bots' },
-    { at: 35000, up: 'colorVac' },
-    { at: 45000, up: 'shadeVac' },
+    { at: 5000, up: 'belts' },
+    { at: 10000, up: 'bots' },
+    { at: 10000, decor: 'dock' },
+    { at: 13000, up: 'botCarry' },
+    { at: 15000, up: 'bots' },
+    { at: 17000, up: 'botSpeed' },
+    { at: 20000, up: 'vacuum' },
+    { at: 23000, up: 'bots' },
+    { at: 27000, up: 'botCarry' },
+    { at: 30000, up: 'bots' },
+    { at: 33000, up: 'colorVac' },
+    { at: 42000, up: 'shadeVac' },
     { at: 60000, goal: 'Rainbow Wall lights up', icon: '🌈' },
-  ];
+  ].sort((a, b) => a.at - b.at);
+  // where on the ladder something first unlocks, for messages
+  const unlockAt = key => { const r = LADDER.find(e => e.up === key || e.decor === key); return r ? r.at.toLocaleString() : '?'; };
 
   // Color milestones are cosmetic: sort enough of one color family to unlock its decoration.
   const TIERS = [150];
@@ -767,11 +769,12 @@
   }
 
   // Let a crayon roll down the side of a pile until it finds a resting spot
+  let settleSteps = 30;   // the broom lowers this so swept crayons don't roll back into the gap
   function settlePoint(x, z) {
     [x, z] = pushOut(x, z);
     let y = supportAt(x, z);
     // a step longer than the contact radius, and a drop that gives a steep-ish heap
-    for (let k = 0; k < 30; k++) {
+    for (let k = 0; k < settleSteps; k++) {
       let best = null, by = y;
       for (let j = 0; j < 6; j++) {
         const a = Math.random() * TAU;
@@ -2123,7 +2126,7 @@
   }
   function toggleTote() {
     if (carry) { toast('Put the box you are carrying on a shelf first.'); return; }
-    if (!lvl('tote')) { toast('The tote bucket unlocks at 1,500 crayons sorted.'); return; }
+    if (!lvl('tote')) { toast(`The tote bucket unlocks at ${unlockAt('tote')} crayons sorted.`); return; }
     tote.on = !tote.on;
     if (tote.on && broom.on) { broom.on = false; broomGroup.visible = false; }
     if (tote.on && hand.n) {
@@ -2140,7 +2143,7 @@
   }
   function scoopTote(first) {
     const cap = toteCap(lvl('tote')), space = cap - tote.items.length;
-    if (space <= 0) { toast('Your tote is full! Walk past boxes to drop crayons off, or press Q to dump it.'); return; }
+    if (space <= 0) { toast('Your tote is full! Tip it into a hopper, click boxes to hand them their shade, or press Q to dump it.'); return; }
     const r = Math.max(0.6, scoop(lvl('hand')) + 0.2), picked = [first], cands = [];
     forNear(first.x, first.z, r, o => {
       if (o === first || o.delay > 0 || o.claimed) return;
@@ -2155,9 +2158,9 @@
     blip(300 + picked.length * 12, 0.09, 'triangle', 0.06);
   }
   // hand the box every crayon of its shade that fits
-  function depositTote(b, quiet) {
+  function depositTote(b, quiet, limit = handSize(lvl('hand'))) {
     if (!tote.items.length || !state.boxes.includes(b)) return 0;
-    let room = capOf(b) - b.count - b.incoming, n = 0;
+    let room = Math.min(limit, capOf(b) - b.count - b.incoming), n = 0;
     if (room <= 0) return 0;
     toteGroup.getWorldPosition(handWorld);
     const keep = [];
@@ -2194,19 +2197,14 @@
     tote.items = [];
     refreshTote();
   }
-  // walking past boxes drops off what they take
+  // Carrying only collects. Boxes never pull from the tote on their own; the wagon
+  // tips everything into a hopper you walk past (the tote and vacuum need a click).
   function updateTote(dt) {
-    if (!tote.on || !tote.items.length) return;
+    if (!tote.on || !tote.items.length || !lvl('wagon') || vac.on) return;
     tote.t -= dt;
     if (tote.t > 0) return;
     tote.t = 0.3;
-    const reach = lvl('wagon') ? 2.5 : 1.5;
-    for (const b of state.boxes) {
-      if (Math.hypot(b.x - player.x, b.z - player.z) < reach) depositTote(b, true);
-      if (!tote.items.length) break;
-    }
-    // whatever no box wanted goes into a hopper you walk past
-    const h = tote.items.length && !vac.on && nearestHopper(player.x, player.z, reach + 0.6);
+    const h = nearestHopper(player.x, player.z, 2.2);
     if (h) { feedHopper(h, tote.items.splice(0), camera.position.clone().add(new T.Vector3(0, -0.4, 0))); refreshTote(); }
   }
 
@@ -2340,7 +2338,7 @@
     for (const t of state.tape) { const m = tapeMesh(t, new T.Mesh(tapeGeo, tapeMats[t.c])); m.receiveShadow = true; tapeGroup.add(m); }
   }
   function toggleTapeMode() {
-    if (!lvl('tape')) { toast('Floor tape unlocks at 2,500 crayons sorted.'); return; }
+    if (!lvl('tape')) { toast(`Floor tape unlocks at ${unlockAt('tape')} crayons sorted.`); return; }
     tapeMode.on = !tapeMode.on; tapeMode.start = null;
     if (tapeMode.on && hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
     toast(tapeMode.on ? 'Tape mode: click the floor to start a lane, click again to end it. R color · Backspace undo · N done.' : 'Put the tape away.');
@@ -2379,7 +2377,7 @@
   plannerMarker.rotation.x = -Math.PI / 2; plannerMarker.visible = false;
   scene.add(plannerMarker);
   function togglePlanner() {
-    if (!lvl('tape')) { toast('The planner view unlocks with floor tape, at 2,500 crayons sorted.'); return; }
+    if (!lvl('tape')) { toast(`The planner view unlocks with floor tape, at ${unlockAt('tape')} crayons sorted.`); return; }
     planner.on = !planner.on;
     if (planner.on) {
       if (locked) document.exitPointerLock();
@@ -2433,7 +2431,7 @@
     camera.add(vacGroup);
   }
   function toggleVac() {
-    if (!lvl('vacuum')) { toast('The crayon vacuum unlocks at 25,000 crayons sorted.'); return; }
+    if (!lvl('vacuum')) { toast(`The crayon vacuum unlocks at ${unlockAt('vacuum')} crayons sorted.`); return; }
     if (carry) { toast('Put the box you are carrying on a shelf first.'); return; }
     if (vac.on) {
       vac.on = false; tote.on = false;
@@ -2454,13 +2452,14 @@
     const opts = ['any'];
     if (c >= 0 && lvl('colorVac')) opts.push('f' + SHADES[c].family);
     if (c >= 0 && lvl('shadeVac')) opts.push('s' + c);
-    if (opts.length === 1) { vac.filter = 'any'; toast(lvl('colorVac') ? 'Look at a crayon and press R to target its color.' : 'Targeting one color family unlocks at 35,000 sorted.'); return; }
+    if (opts.length === 1) { vac.filter = 'any'; toast(lvl('colorVac') ? 'Look at a crayon and press R to target its color.' : `Targeting one color family unlocks at ${unlockAt('colorVac')} sorted.`); return; }
     const i = opts.indexOf(vac.filter);
     vac.filter = opts[(i + 1) % opts.length];
     toast(`Vacuum set to ${modeName(vac.filter)}.`);
   }
   function vacClick() {
-    if (aim.type === 'box') depositTote(aim.obj);
+    // a shade vacuum's bag is all one shade, so it empties straight in; otherwise a handful
+    if (aim.type === 'box') depositTote(aim.obj, false, vac.filter[0] === 's' ? Infinity : handSize(lvl('hand')));
     else if (aim.type === 'decor' && aim.obj.type === 'hopper') {
       if (tote.items.length) { feedHopper(aim.obj, tote.items.splice(0), camera.position.clone()); refreshTote(); }
       else toast('The bag is empty. Hold the mouse to vacuum.');
@@ -2471,7 +2470,7 @@
     if (!vac.on) return;
     vacGroup.userData.bag.scale.setScalar(0.6 + tote.items.length / VAC_CAP * 1.2);
     if (!vac.held || anyModal() || placing) { vac.acc = 0; return; }
-    if (tote.items.length >= VAC_CAP) { if (!vac.fullWarn) { toast('The bag is full! Empty it into the hopper or walk past boxes.'); vac.fullWarn = true; } return; }
+    if (tote.items.length >= VAC_CAP) { if (!vac.fullWarn) { toast('The bag is full! Empty it into a hopper.'); vac.fullWarn = true; } return; }
     vac.fullWarn = false;
     vac.acc += dt * 40;
     const fx = -Math.sin(player.yaw), fz = -Math.cos(player.yaw);
@@ -2547,10 +2546,12 @@
     list.sort((a, b) => b.y - a.y);
     const moved = list.slice(0, SWEEP_MAX);
     moved.forEach(o => removeCrayon(o));
+    settleSteps = 3;
     moved.forEach(o => {
       const push = SWEEP_PUSH * rand(0.7, 1.2);
       addCrayon(o.x + fx * push + rand(-0.12, 0.12), o.z + fz * push + rand(-0.12, 0.12), o.c);
     });
+    settleSteps = 30;
     blip(180 + Math.random() * 60, 0.07, 'triangle', 0.02);
   }
 
@@ -2904,7 +2905,7 @@
     if (beltMode.pts && beltMode.pts.length > 1) draw(beltMode.pts, true);
   }
   function toggleBeltMode() {
-    if (!lvl('belts')) { toast('Conveyor belts unlock at 13,000 crayons sorted.'); return; }
+    if (!lvl('belts')) { toast(`Conveyor belts unlock at ${unlockAt('belts')} crayons sorted.`); return; }
     if (beltMode.on) { finishBelt(); beltMode.on = false; toast('Belt tool put away.'); return; }
     beltMode.on = true; beltMode.pts = null;
     if (hand.n) dropAt(new T.Vector3(player.x, 0, player.z), true);
@@ -3133,7 +3134,23 @@
       }
     }
     if (placing.kind === 'box') refreshBox(o); else refreshDecor(o);
+    measureCrowd(o);
   }
+
+  // You can only build on floor you've cleared: count the crayons under the footprint
+  function measureCrowd(o) {
+    placing.crowd = 0; placing.crowdMax = Infinity;
+    if (!o.group || (isDrawer(o) && o.level > 0) || (placing.kind === 'decor' && DECOR[o.type].under)) return;
+    const b = footprintOf(o.group);
+    if (b.isEmpty()) return;
+    const x0 = b.min.x, x1 = b.max.x, z0 = b.min.z, z1 = b.max.z;
+    const area = (x1 - x0) * (z1 - z0);
+    let n = 0;
+    forNear((x0 + x1) / 2, (z0 + z1) / 2, Math.hypot(x1 - x0, z1 - z0) / 2 + 0.05, c => { if (!c.dead && c.x > x0 && c.x < x1 && c.z > z0 && c.z < z1) n++; });
+    placing.crowd = n;
+    placing.crowdMax = Math.max(3, Math.round(area * 12));
+  }
+  const crowdBlocked = () => placing && placing.crowd > placing.crowdMax;
 
   // Measure what's actually drawn (not labels or glows) and push it back inside the walls
   const _fitBox = new T.Box3(), _fitTmp = new T.Box3();
@@ -3166,6 +3183,7 @@
     const o = placing.obj;
     const kind = placing.kind;
     if (placing.tooTall) { toast(`That stack is already ${STACK_MAX} drawers tall. Start a new one beside it.`); return; }
+    if (crowdBlocked()) { toast(`${placing.crowd} crayons are in the way. Clear the floor here first: the broom (J) pushes them aside.`); blip(200, 0.12, 'triangle', 0.05); return; }
     placing = null;
     if (isDrawer(o)) restack();
     // Crayons under the new spot get shoved aside
@@ -3186,7 +3204,7 @@
 
   function cancelPlacing() {
     if (!placing) return;
-    if (placing.isNew) { finishPlacing(); return; }
+    if (placing.isNew) { if (crowdBlocked() || placing.tooTall) putAway(); else finishPlacing(); return; }
     const o = placing.obj;
     Object.assign(o, placing.prev);
     if (isDrawer(o)) o.level -= 0.5; // slots back in where it came from
@@ -3372,7 +3390,8 @@
       const name = placing.kind === 'box' ? `${SHADES[o.color].name} ${kindName(o)}` : DECOR[o.type].name;
       const canRotate = placing.kind === 'box' || !DECOR[o.type].wall;
       const stackNote = isDrawer(o) ? (placing.tooTall ? ' · stack is full' : o.level ? ` · stacking, level ${o.level + 1}` : ' · look at a drawer to stack on it') : '';
-      html = `Placing <b>${name}</b> <span class="dim">${stackNote} · click to place${canRotate ? ' · R rotate' : ''}${' · X put away'}${placing.isNew ? '' : ' · Esc cancel'}${placing.snap ? ' · hold Alt to place freely' : ''}</span>`;
+      const crowdNote = crowdBlocked() ? ` · ⚠️ ${placing.crowd} crayons in the way: J grabs the broom to clear it` : '';
+      html = `Placing <b>${name}</b> <span class="dim">${stackNote}${crowdNote} · click to place${canRotate ? ' · R rotate' : ''}${' · X put away'}${placing.isNew ? '' : ' · Esc cancel'}${placing.snap ? ' · hold Alt to place freely' : ''}</span>`;
     } else if (aim.type === 'crayon') {
       const s = SHADES[aim.obj.c];
       html = `${sw(s.hex)}<b>${s.name}</b> <span class="dim">· click to ${hand.n ? 'grab more' : 'pick up'}</span>`;
@@ -3430,7 +3449,7 @@
       hh = `${sw(SHADES[carry.color].hex)}Carrying a packed <b>${SHADES[carry.color].name}</b> box <span class="dim">· click a shelf spot · Q put back</span>`;
     } else if (tote.on) {
       const kinds = new Set(tote.items).size;
-      hh = `${lvl('wagon') ? '🛻 Wagon' : '🪣 Tote'} <b>${tote.items.length} / ${toteCap(lvl('tote'))}</b>${kinds ? ` <span class="dim">· ${kinds} shade${kinds > 1 ? 's' : ''} · walk past boxes to drop off · Q dump · B put away</span>` : ' <span class="dim">· click crayons to scoop · B put away</span>'}`;
+      hh = `${lvl('wagon') ? '🛻 Wagon' : '🪣 Tote'} <b>${tote.items.length} / ${toteCap(lvl('tote'))}</b>${kinds ? ` <span class="dim">· ${kinds} shade${kinds > 1 ? 's' : ''} · click a box for a handful of its shade · click a hopper to tip it all in · Q dump · B put away</span>` : ' <span class="dim">· click crayons to scoop · B put away</span>'}`;
     } else if (hand.n) {
       const s = SHADES[hand.c];
       hh = `${sw(s.hex)}Holding <b>${hand.n} ${s.name}</b> <span class="dim">· Q drop</span>`;
@@ -3585,7 +3604,7 @@
     else if (e.code === 'KeyN' && !planner.on) toggleTapeMode();
     else if (e.code === 'KeyK' && !planner.on) toggleBeltMode();
     else if (e.code === 'KeyH' && !planner.on) toggleVac();
-    else if (e.code === 'KeyJ' && !planner.on && !placing) toggleBroom();
+    else if (e.code === 'KeyJ' && !planner.on) { if (placing) cancelPlacing(); if (!placing) toggleBroom(); }
     else if (e.code === 'Enter' && beltMode.on) finishBelt();
     else if (e.code === 'Backspace' && beltMode.on) { e.preventDefault(); undoBelt(); }
     else if (e.code === 'KeyR' && vac.on && !placing) cycleVacFilter();
@@ -4624,7 +4643,7 @@
   window.craySorting = {
     get state() { return state; }, get crayons() { return cr; }, get aim() { return aim; },
     player, SHADES, save, act, pickUp, tossToBox, takeFromBox, refreshBox, hand, camera, coloring, get marks() { return marks; },
-    broom, toggleBroom, fitInRoom, inPocket, putAway, get repairedMissing() { return repairedMissing; }, tote, toggleTote, scoopTote, vac, toggleVac, feedHopper, toggleBeltMode, beltClick, finishBelt, get bots() { return bots; }, shadeDone, ACHIEVEMENTS, toggleTapeMode, togglePlanner, planner, tapeMode, tapeClick, storageUsed, startPlacing, finishPlacing, addBox, buildDecor, get placing() { return placing; }, openShop, celebrate, liftPacked, placeCarry, tidyShelf, get carry() { return carry; }, shelfSlotAt, packBox, lvl, boxLimit,
+    depositTote, updateTote, broom, toggleBroom, fitInRoom, inPocket, putAway, get repairedMissing() { return repairedMissing; }, tote, toggleTote, scoopTote, vac, toggleVac, feedHopper, toggleBeltMode, beltClick, finishBelt, get bots() { return bots; }, shadeDone, ACHIEVEMENTS, toggleTapeMode, togglePlanner, planner, tapeMode, tapeClick, storageUsed, startPlacing, finishPlacing, addBox, buildDecor, get placing() { return placing; }, openShop, celebrate, liftPacked, placeCarry, tidyShelf, get carry() { return carry; }, shelfSlotAt, packBox, lvl, boxLimit,
     setBest(n) { state.bestTotal = n; recomputeUnlocks(); applyLabels(); syncBots(); state.boxes.forEach(refreshBox); },
   };
 })();
