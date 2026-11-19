@@ -39,7 +39,7 @@
   const START_BOXES = [1, 4, 7, 10, 13, 16];
 
   const DECOR = {
-    shelf:    { name: 'Shelf Unit',         icon: '🗄️', r: 0.75, cy: 1.0, free: true, desc: 'Holds 12 packed boxes. Full boxes you pack go to the nearest shelf with room.' },
+    shelf:    { name: 'Shelf Unit',         icon: '🗄️', r: 0.75, cy: 1.0, free: true, desc: 'Holds 12 packed boxes. Full boxes you pack go to the nearest shelf with room. Click a packed box to carry it to another spot, and press C on a shelf to tidy it by color.' },
     plant:    { name: 'Potted Plant',       icon: '🪴', r: 0.4,  cy: 0.6 },
     rug:      { name: 'Cozy Rug',           icon: '🟣', r: 1.5,  cy: 0.05, under: true },
     lamp:     { name: 'Floor Lamp',         icon: '💡', r: 0.35, cy: 0.9 },
@@ -71,8 +71,8 @@
 
   // Upgrades. Their level is how many of their rewards you've unlocked.
   const UPGRADES = {
-    hand:     { name: 'Bigger Handfuls', icon: '🤲', info: l => `Grab ${handSize(l)} crayons of the same shade at once` },
-    reach:    { name: 'Wide Scoop',      icon: '🥄', info: l => `Scoop matching crayons from ${scoop(l).toFixed(2)}m around` },
+    hand:     { name: 'Bigger Handfuls', icon: '🤲', info: l => `Scoop up to ${handSize(l)} crayons of one shade from ${scoop(l).toFixed(1)}m around` },
+    storage:  { name: 'Storage Permit',  icon: '📋', info: l => `Room for ${limTxt(boxLimit(l))} boxes and drawers, and ${limTxt(shelfLimit(l))} shelf units` },
     glow:     { name: 'Shade Spotter',   icon: '🔦', info: l => l >= 2 ? 'Looking at a crayon lights up its whole shade' : 'Crayons you hold light up their whole shade and their box' },
     bigBox:   { name: 'Roomier Boxes',   icon: '📦', info: l => `Boxes hold ${boxCap(l)} crayons` },
     speed:    { name: 'Comfy Sneakers',  icon: '👟', info: l => `Walk ${l * 15}% faster` },
@@ -87,10 +87,21 @@
   // The main unlock ladder: total crayons sorted, across every box, drawer and shelf.
   // Unlocks use the best total you've reached, so taking crayons out never locks anything.
   const LADDER = [
+    { at: 60, up: 'storage' },
     { at: 100, up: 'hand' },
+    { at: 250, up: 'storage' },
+    { at: 1200, up: 'storage' },
+    { at: 2200, up: 'storage' },
+    { at: 3500, up: 'storage' },
+    { at: 4500, up: 'hand' },
+    { at: 5200, up: 'storage' },
+    { at: 9500, up: 'storage' },
+    { at: 13000, up: 'storage' },
+    { at: 17000, up: 'storage' },
+    { at: 22000, up: 'storage' },
     { at: 200, up: 'speed' },
     { at: 300, up: 'labels' },
-    { at: 450, up: 'reach' },
+    { at: 450, up: 'storage' },
     { at: 600, up: 'glow' },
     { at: 800, up: 'bigBox' },
     { at: 1000, up: 'hand' },
@@ -105,7 +116,7 @@
     { at: 5000, up: 'bigBox' },
     { at: 6000, up: 'glow' },
     { at: 6000, soon: 'Wagon', icon: '🛒' },
-    { at: 7000, up: 'reach' },
+    { at: 7000, up: 'storage' },
     { at: 7500, up: 'tote' },
     { at: 9000, up: 'hand' },
     { at: 9000, soon: 'Sorter Hopper', icon: '🎰' },
@@ -139,8 +150,14 @@
   const rewardName = r => r.soon ? r.soon : r.up ? UPGRADES[r.up].name : DECOR[r.decor].name;
   const rewardIcon = r => r.soon ? r.icon : r.up ? UPGRADES[r.up].icon : DECOR[r.decor].icon;
 
-  const handSize = l => [1, 3, 6, 10, 15, 20][Math.min(l, 5)];
-  const scoop = l => 0.45 + l * 0.35;
+  const handSize = l => [1, 5, 10, 16, 24][Math.min(l, 4)];
+  const scoop = l => 0.45 + l * 0.4;   // the reach grows with your handful
+  // Storage is capped, and Storage Permits raise the cap as you sort
+  const BOX_LIMITS = [10, 13, 16, 20, 25, 30, 36, 44, 54, 66, 80, 100, Infinity];
+  const SHELF_LIMITS = [2, 3, 4, 5, 7, 9, 12, 15, 19, 24, 30, 38, Infinity];
+  const boxLimit = l => BOX_LIMITS[Math.min(l, BOX_LIMITS.length - 1)];
+  const shelfLimit = l => SHELF_LIMITS[Math.min(l, SHELF_LIMITS.length - 1)];
+  const limTxt = n => n === Infinity ? 'unlimited' : String(n);
   const boxCap = l => 30 + l * 15;
   const botCarry = l => 2 + l * 2;
   const walkSpeed = l => 4 * (1 + l * 0.15);
@@ -993,12 +1010,13 @@
     }
   }
 
+  const shelfUsed = d => d.packed.filter(c => c != null).length;
   function packBox(b) {
     if (isDrawer(b) || b.count < capacity()) return;
     // the nearest shelf unit with room gets the packed box
     let shelf = null, bd = Infinity;
     for (const d of state.decor) {
-      if (d.type !== 'shelf' || d.packed.length >= SHELF_CAP) continue;
+      if (d.type !== 'shelf' || shelfUsed(d) >= SHELF_CAP) continue;
       const dist = (d.x - b.x) ** 2 + (d.z - b.z) ** 2;
       if (dist < bd) { bd = dist; shelf = d; }
     }
@@ -1006,7 +1024,8 @@
       toast('No shelf space! Place a Shelf Unit (E → Furniture) to store packed boxes.');
       return;
     }
-    shelf.packed.push(b.color);
+    const gap = shelf.packed.findIndex((c, i) => c == null && !(carry && carry.shelf === shelf && carry.slot === i));
+    if (gap >= 0) shelf.packed[gap] = b.color; else shelf.packed.push(b.color);
     rebuildDecor(shelf);
     b.count = 0;
     b.packed = (b.packed || 0) + 1;
@@ -1133,6 +1152,7 @@
         for (const x of [-1.03, 1.03]) g.add(mesh(new T.BoxGeometry(0.06, 2.15, 0.55), wood, x, 1.07, 0));
         g.add(mesh(new T.BoxGeometry(2.1, 2.15, 0.03), std(0x8a5a35), 0, 1.07, -0.26));
         d.packed.forEach((c, i) => {
+          if (c == null || (carry && carry.shelf === d && carry.slot === i)) return;
           const level = Math.floor(i / 4), slot = i % 4;
           const pb = new T.Group();
           pb.add(mesh(new T.BoxGeometry(0.44, 0.5, 0.44), std(cardboard, { roughness: 0.9 })));
@@ -1657,7 +1677,9 @@
     const bHit = rayBox(o, d, TOSS_DIST);
     if (bHit) cands.push({ type: 'box', ...bHit });
     const dHit = rayDecor(o, d, 8);
-    if (dHit) cands.push({ type: 'decor', ...dHit });
+    const sHit = shelfSlotAt(o, d, 6);
+    if (sHit) cands.push({ type: 'decor', ...sHit });
+    else if (dHit) cands.push({ type: 'decor', ...dHit });
     if (floor) cands.push({ type: 'floor', t: floor.t, point: floor.point });
     cands.sort((a, b) => a.t - b.t);
     aim = cands[0] || { type: null };
@@ -1702,7 +1724,7 @@
     const space = n - hand.n;
     if (space <= 0) { toast(`Your hands are full (${n}). Toss them into a box!`); return; }
     const picked = [first];
-    const r = scoop(lvl('reach'));
+    const r = scoop(lvl('hand'));
     if (space > 1) {
       const cands = [];
       forNear(first.x, first.z, r, o => {
@@ -1838,6 +1860,7 @@
     });
   }
   function toggleTote() {
+    if (carry) { toast('Put the box you are carrying on a shelf first.'); return; }
     if (!lvl('tote')) { toast('The tote bucket unlocks at 1,500 crayons sorted.'); return; }
     tote.on = !tote.on;
     if (tote.on && hand.n) {
@@ -1855,7 +1878,7 @@
   function scoopTote(first) {
     const cap = toteCap(lvl('tote')), space = cap - tote.items.length;
     if (space <= 0) { toast('Your tote is full! Walk past boxes to drop crayons off, or press Q to dump it.'); return; }
-    const r = Math.max(0.6, scoop(lvl('reach')) + 0.2), picked = [first], cands = [];
+    const r = Math.max(0.6, scoop(lvl('hand')) + 0.2), picked = [first], cands = [];
     forNear(first.x, first.z, r, o => {
       if (o === first || o.delay > 0 || o.claimed) return;
       const d2 = (o.x - first.x) ** 2 + (o.z - first.z) ** 2;
@@ -1917,6 +1940,75 @@
       if (Math.hypot(b.x - player.x, b.z - player.z) < 1.5) depositTote(b, true);
       if (!tote.items.length) break;
     }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Rearranging shelves: lift a packed box, carry it, put it in any shelf spot
+  // ---------------------------------------------------------------------------
+  let carry = null;   // { shelf, slot, color } while you carry a packed box
+  const carryGroup = new T.Group();
+  {
+    carryGroup.add(mesh(new T.BoxGeometry(0.44, 0.5, 0.44), std(cardboard, { roughness: 0.9 }), 0, 0, 0, false));
+    carryGroup.add(mesh(new T.BoxGeometry(0.08, 0.505, 0.445), std(0xe9d7b5, { roughness: 0.4 }), 0, 0, 0, false));
+    const tag = mesh(new T.PlaneGeometry(0.3, 0.16), std(0xffffff, { roughness: 0.6 }), 0, 0.05, 0.222, false);
+    carryGroup.add(tag); carryGroup.userData.tag = tag;
+    carryGroup.position.set(0.3, -0.32, -0.75); carryGroup.rotation.set(0.15, -0.5, 0);
+    carryGroup.visible = false;
+    camera.add(carryGroup);
+  }
+  function shelfSlotAt(o, d, maxT) {
+    let best = null;
+    const inv = new T.Matrix4(), ray = new T.Ray(), hit = new T.Vector3();
+    const plane = new T.Plane(new T.Vector3(0, 0, 1), -0.28);
+    for (const dc of state.decor) {
+      if (dc.type !== 'shelf' || !dc.group || (placing && placing.obj === dc)) continue;
+      dc.group.updateMatrixWorld();
+      inv.copy(dc.group.matrixWorld).invert();
+      ray.set(o, d).applyMatrix4(inv);
+      if (ray.direction.z >= 0 || !ray.intersectPlane(plane, hit)) continue;
+      const t = hit.distanceTo(ray.origin);
+      if (t > maxT || (best && t > best.t) || Math.abs(hit.x) > 1.05 || hit.y < 0.06 || hit.y > 2.1) continue;
+      const col = Math.max(0, Math.min(3, Math.round((hit.x + 0.75) / 0.5)));
+      const lev = Math.max(0, Math.min(2, Math.floor((hit.y - 0.08) / 0.7)));
+      best = { obj: dc, t, slot: lev * 4 + col };
+    }
+    return best;
+  }
+  function refreshCarry() {
+    carryGroup.visible = !!carry;
+    if (carry) carryGroup.userData.tag.material.color.set(SHADES[carry.color].hex);
+  }
+  function liftPacked(shelf, slot) {
+    const c = shelf.packed[slot];
+    if (c == null) return false;
+    carry = { shelf, slot, color: c };
+    rebuildDecor(shelf); refreshCarry();
+    blip(440, 0.08, 'triangle', 0.05);
+    return true;
+  }
+  function placeCarry(shelf, slot) {
+    const src = carry;
+    if (shelf === src.shelf && slot === src.slot) { carry = null; rebuildDecor(shelf); refreshCarry(); return; }
+    while (shelf.packed.length <= slot) shelf.packed.push(null);
+    const other = shelf.packed[slot];
+    shelf.packed[slot] = src.color;
+    src.shelf.packed[src.slot] = other == null ? null : other;   // swap when the spot was taken
+    carry = null;
+    rebuildDecor(shelf); if (src.shelf !== shelf) rebuildDecor(src.shelf);
+    refreshCarry();
+    blip(620, 0.1, 'triangle', 0.05);
+    save();
+  }
+  function cancelCarry() {
+    if (!carry) return;
+    const sh = carry.shelf; carry = null; rebuildDecor(sh); refreshCarry();
+  }
+  function tidyShelf(shelf) {
+    const order = shelf.packed.filter(c => c != null).sort((a, b) => a - b);
+    shelf.packed = order;
+    rebuildDecor(shelf);
+    toast(order.length ? 'Tidied the shelf: boxes sorted by color.' : 'This shelf is empty.');
+    save();
   }
 
   // ---------------------------------------------------------------------------
@@ -2197,7 +2289,7 @@
       save();
       return;
     } else {
-      if (o.type === 'shelf' && o.packed.length) { toast('Only empty shelves can be put away.'); return; }
+      if (o.type === 'shelf' && shelfUsed(o)) { toast('Only empty shelves can be put away.'); return; }
       scene.remove(o.group);
       state.decor = state.decor.filter(x => x !== o);
       toast(`Put away the ${DECOR[o.type].name}.`);
@@ -2364,6 +2456,12 @@
       const u = aim.obj.userData;
       html = u.hidden ? '📄 <b>A coloring page!</b> <span class="dim">· click to take it</span>'
         : `📄 <b>${PAGES[u.page].name}</b> <span class="dim">· ${hand.n ? 'click or V to color with ' + SHADES[hand.c].name : 'pick up a crayon to color'}</span>`;
+    } else if (aim.type === 'decor' && aim.slot != null) {
+      const sh = aim.obj, here = sh.packed[aim.slot];
+      const lifted = carry && carry.shelf === sh && carry.slot === aim.slot;
+      const what = carry ? (lifted ? 'click to put it back' : here != null ? `click to swap with ${SHADES[here].name}` : 'click to put it here')
+        : here != null ? `${sw(SHADES[here].hex)}${SHADES[here].name} · click to pick up` : 'empty spot';
+      html = `<b>Shelf</b> ${shelfUsed(sh)}/${SHELF_CAP} <span class="dim">· ${what}${carry ? '' : ' · C tidy by color · G move'}</span>`;
     } else if (aim.type === 'decor') {
       html = `<b>${DECOR[aim.obj.type].name}</b> <span class="dim">· G move</span>`;
     } else if (aim.type === 'floor') {
@@ -2383,7 +2481,9 @@
     crosshair.classList.toggle('free', !locked);
     crosshair.classList.toggle('on', aim.type === 'crayon' || aim.type === 'box');
     let hh = '';
-    if (tote.on) {
+    if (carry) {
+      hh = `${sw(SHADES[carry.color].hex)}Carrying a packed <b>${SHADES[carry.color].name}</b> box <span class="dim">· click a shelf spot · Q put back</span>`;
+    } else if (tote.on) {
       const kinds = new Set(tote.items).size;
       hh = `🪣 Tote <b>${tote.items.length} / ${toteCap(lvl('tote'))}</b>${kinds ? ` <span class="dim">· ${kinds} shade${kinds > 1 ? 's' : ''} · walk past boxes to drop off · Q dump · B put away</span>` : ' <span class="dim">· click crayons to scoop · B put away</span>'}`;
     } else if (hand.n) {
@@ -2428,6 +2528,11 @@
   function act() {
     updateAim();
     if (placing) { finishPlacing(); return; }
+    if (carry) {
+      if (aim.type === 'decor' && aim.slot != null) placeCarry(aim.obj, aim.slot);
+      else toast('Click a spot on a shelf to put the box there. Q puts it back.');
+      return;
+    }
     if (tote.on) {
       if (aim.type === 'crayon') scoopTote(aim.obj);
       else if (aim.type === 'box') depositTote(aim.obj);
@@ -2445,6 +2550,7 @@
       return;
     }
     if (aim.type === 'crayon') pickUp(aim.obj);
+    else if (aim.type === 'decor' && aim.slot != null && aim.obj.packed[aim.slot] != null) liftPacked(aim.obj, aim.slot);
     else if (aim.type === 'page' && aim.obj.userData.hidden) findPage(aim.obj);
     else if (aim.type === 'page') toast('Pick up a crayon, then click this page (or press V) to color it.');
     else if (aim.type === 'box' && !isDrawer(aim.obj) && aim.obj.count >= capacity() && !lvl('autoPack')) packBox(aim.obj);
@@ -2509,6 +2615,7 @@
     else if (e.code === 'KeyF') openShop('collection');
     else if (e.code === 'KeyL') { if (!locked) requestLock(); }
     else if (e.code === 'KeyB') toggleTote();
+    else if (e.code === 'KeyQ' && carry) cancelCarry();
     else if (e.code === 'KeyQ' && tote.on && tote.items.length) dumpTote();
     else if (e.code === 'KeyQ' && hand.n) dropAt(new T.Vector3(player.x - Math.sin(player.yaw) * 0.8, 0, player.z - Math.cos(player.yaw) * 0.8));
     else if (e.code === 'KeyR' && placing) {
@@ -2527,13 +2634,15 @@
     }
     else if (e.code === 'KeyG' && !placing) {
       updateAim();
+      if (carry) { toast('Put the box you are carrying on a shelf first (Q puts it back).'); return; }
       if (aim.type === 'box') startPlacing('box', aim.obj, false);
       else if (aim.type === 'decor') startPlacing('decor', aim.obj, false);
       else if (aim.rug) startPlacing('decor', aim.rug, false);
       else toast('Look at a box or decoration, then press G to move it.');
     } else if (e.code === 'KeyC' && !placing) {
       updateAim();
-      if (aim.type === 'box') {
+      if (aim.type === 'decor' && aim.obj.type === 'shelf' && !carry) tidyShelf(aim.obj);
+      else if (aim.type === 'box') {
         if (aim.obj.count === 0) openPicker(aim.obj);
         else toast(isDrawer(aim.obj) ? 'Only empty drawers can change shade.' : 'Only empty boxes can change shade. Fill it up and pack it first.');
       }
@@ -2590,15 +2699,20 @@
     if (shopTab === 'boxes') {
       const counts = new Array(SHADES.length).fill(0);
       cr.forEach(o => { counts[o.c]++; });
+      const used = state.boxes.length, lim = boxLimit(lvl('storage'));
+      const full = used >= lim;
+      const nextPermit = LADDER.find(r => r.up === 'storage' && r.at > state.bestTotal);
       const intro = document.createElement('div');
       intro.className = 'tab-intro';
       intro.innerHTML = `<div class="kind-pick">
           <button data-kind="box" class="${shopKind === 'box' ? 'active' : ''}">📦 Box<small>Packs onto a shelf when full</small></button>
           <button data-kind="drawer" class="${shopKind === 'drawer' ? 'active' : ''}">🗄️ Drawer<small>Holds ${capacity() * 3}, stacks ${STACK_MAX} high</small></button>
         </div>
-        <p>${shopKind === 'drawer'
-          ? 'Drawers are free. Look at a drawer while placing a new one to stack it on top, and build towers of sorting drawers.'
-          : 'Boxes are free. Grab one for any shade and put it wherever makes sense to you. Make as many as you like.'}</p>`;
+        <div class="limit${full ? ' full' : ''}"><b>📋 ${used} / ${limTxt(lim)}</b> boxes and drawers placed${lim === Infinity ? '' : nextPermit ? ` <span>· the next Storage Permit at ${nextPermit.at.toLocaleString()} sorted adds more</span>` : ''}</div>
+        <p>${full ? 'Your storage is full. Press C on an empty box to give it a new shade, put one away with G then X, or sort more to earn a Storage Permit.'
+          : shopKind === 'drawer'
+          ? 'Look at a drawer while placing a new one to stack it on top, and build towers of sorting drawers.'
+          : 'Grab a box for any shade and put it wherever makes sense to you. Full boxes pack onto a shelf and the box is ready to fill again.'}</p>`;
       intro.querySelectorAll('[data-kind]').forEach(b => { b.onclick = () => { shopKind = b.dataset.kind; renderShop(); }; });
       list.appendChild(intro);
       FAMILIES.forEach((f, fi) => {
@@ -2612,7 +2726,9 @@
           const have = [nb && nb + ' box' + (nb > 1 ? 'es' : ''), nd && nd + ' drawer' + (nd > 1 ? 's' : '')].filter(Boolean).join(', ') || 'nothing yet';
           const btn = document.createElement('button');
           btn.innerHTML = `<span class="sw" style="background:${s.hex}"></span><span>${s.name}<small>${counts[i].toLocaleString()} on the floor · ${have}</small></span>`;
+          btn.disabled = full;
           btn.onclick = () => {
+            if (state.boxes.length >= boxLimit(lvl('storage'))) return;
             const [x, z] = placeAhead();
             const b = addBox(x, z, i, 0, 0, shopKind);
             closeModals();
@@ -2635,13 +2751,15 @@
           }));
         }
         const n = state.decor.filter(d => d.type === type).length;
-        el.innerHTML = `<h3><span>${open ? def.icon : '🔒'}</span>${def.name}<span class="lvl">${n ? n + ' placed' : ''}</span></h3><p>${open ? (def.desc || (def.wall ? 'Hangs on a wall.' : 'Sits on the floor.')) : how}</p>`;
+        const capped = type === 'shelf' && n >= shelfLimit(lvl('storage'));
+        if (type === 'shelf' && open) how = capped ? `All ${n} shelf units placed. A Storage Permit adds more.` : `${n} of ${limTxt(shelfLimit(lvl('storage')))} shelf units placed.`;
+        el.innerHTML = `<h3><span>${open ? def.icon : '🔒'}</span>${def.name}<span class="lvl">${n ? n + ' placed' : ''}</span></h3><p>${open ? (def.desc || (def.wall ? 'Hangs on a wall.' : 'Sits on the floor.')) + (how ? ' ' + how : '') : how}</p>`;
         const btn = document.createElement('button');
         btn.className = open ? 'primary' : '';
-        btn.disabled = !open;
-        btn.textContent = open ? 'Place one' : 'Locked';
+        btn.disabled = !open || capped;
+        btn.textContent = !open ? 'Locked' : capped ? 'At the limit' : 'Place one';
         btn.onclick = () => {
-          if (!open) return;
+          if (!open || capped) return;
           const [x, z] = placeAhead();
           const d = { type, x, y: def.wall ? 2.2 : 0, z, ry: 0 };
           state.decor.push(d);
@@ -3452,7 +3570,7 @@
   window.craySorting = {
     get state() { return state; }, get crayons() { return cr; }, get aim() { return aim; },
     player, SHADES, save, act, pickUp, tossToBox, takeFromBox, refreshBox, hand, camera, coloring, get marks() { return marks; },
-    tote, toggleTote, scoopTote, openShop, celebrate,
+    tote, toggleTote, scoopTote, openShop, celebrate, liftPacked, placeCarry, tidyShelf, get carry() { return carry; }, shelfSlotAt, packBox, lvl, boxLimit,
     setBest(n) { state.bestTotal = n; recomputeUnlocks(); applyLabels(); syncBots(); state.boxes.forEach(refreshBox); },
   };
 })();

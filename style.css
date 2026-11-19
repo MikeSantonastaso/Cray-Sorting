@@ -804,3 +804,8 @@ button kbd { transform: rotate(3deg); }
 .color-tools .current .sw { display: inline-block; width: 15px; height: 15px; border-radius: 4px; margin-right: 6px; vertical-align: -2px; }
 #colorNote { color: #fff; text-shadow: 0 2px 0 rgba(59, 36, 20, .8); font-size: 17px; }
 #colorNote:empty { display: none; }
+
+.limit { display: inline-block; margin-top: 10px; padding: 5px 12px 6px; background: #fff; border: 2.5px solid var(--ink); border-radius: var(--wobble-sm); box-shadow: 0 3px 0 var(--ink-soft); color: var(--ink); font-size: 17px; }
+.limit b { font-family: var(--font-head); font-weight: 600; }
+.limit span { color: var(--muted); }
+.limit.full { background: #ffe3d8; }
